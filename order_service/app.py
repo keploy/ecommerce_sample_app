@@ -68,6 +68,7 @@ def create_order():
 
     user_id = data['userId']
     items = data['items']
+    shipping_address = data.get('shippingAddress')
     idmp_key = request.headers.get('Idempotency-Key')
 
     ok, err = _validate_items(items)
@@ -92,8 +93,20 @@ def create_order():
         user_response = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
         if user_response.status_code != 200:
             return jsonify({'error': 'Invalid user ID'}), 400
+        user_json = user_response.json()
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Could not connect to User Service: {e}'}), 503
+
+    # If shippingAddress not provided, try using user's default address from User service
+    if not shipping_address:
+        try:
+            addrs_resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}/addresses")
+            if addrs_resp.status_code == 200:
+                arr = addrs_resp.json()
+                if isinstance(arr, list) and len(arr) > 0:
+                    shipping_address = arr[0]
+        except Exception:
+            pass
 
     total_amount = 0
     for item in items:
@@ -143,8 +156,8 @@ def create_order():
     order_id = str(uuid.uuid4())
     try:
         cursor.execute(
-            "INSERT INTO orders (id, user_id, status, idempotency_key, total_amount) VALUES (%s, %s, %s, %s, %s)",
-            (order_id, user_id, 'PENDING', idmp_key, round(total_amount, 2))
+            "INSERT INTO orders (id, user_id, status, idempotency_key, total_amount, shipping_address) VALUES (%s, %s, %s, %s, %s, %s)",
+            (order_id, user_id, 'PENDING', idmp_key, round(total_amount, 2), json.dumps(shipping_address) if shipping_address else None)
         )
         item_params = [(order_id, i['productId'], i['quantity'], i['price']) for i in items]
         cursor.executemany(
@@ -232,13 +245,20 @@ def get_order(order_id):
         return jsonify({'error': 'Database connection failed'}), 500
     try:
         cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT id, user_id, status, total_amount, created_at, updated_at FROM orders WHERE id=%s", (order_id,))
+        cur.execute("SELECT id, user_id, status, total_amount, shipping_address, created_at, updated_at FROM orders WHERE id=%s", (order_id,))
         order = cur.fetchone()
         if not order:
             return jsonify({'error': 'Not found'}), 404
         cur.execute("SELECT product_id, quantity, price FROM order_items WHERE order_id=%s", (order_id,))
         items = cur.fetchall()
         order['items'] = items
+        # decode shipping_address JSON if present
+        sa = order.get('shipping_address')
+        if isinstance(sa, str) and sa:
+            try:
+                order['shipping_address'] = json.loads(sa)
+            except Exception:
+                pass
     finally:
         conn.close()
     return jsonify(order), 200

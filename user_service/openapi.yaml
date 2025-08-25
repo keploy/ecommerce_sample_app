@@ -17,6 +17,7 @@ paths:
                 username: { type: string }
                 email: { type: string, format: email }
                 password: { type: string, format: password }
+                phone: { type: string }
       responses:
         '201':
           description: Created
@@ -28,6 +29,7 @@ paths:
                   id: { type: string }
                   username: { type: string }
                   email: { type: string }
+                  phone: { type: string, nullable: true }
         '400': { description: Bad request }
   /api/v1/users/{userId}:
     get:
@@ -48,8 +50,128 @@ paths:
                   id: { type: string }
                   username: { type: string }
                   email: { type: string }
+                  phone: { type: string, nullable: true }
                   created_at: { type: string, format: date-time }
+                  addresses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        line1: { type: string }
+                        line2: { type: string, nullable: true }
+                        city: { type: string }
+                        state: { type: string }
+                        postal_code: { type: string }
+                        country: { type: string }
+                        phone: { type: string, nullable: true }
+                        is_default: { type: boolean }
         '404': { description: Not found }
+  /api/v1/users/{userId}/addresses:
+    post:
+      summary: Create address
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [line1, city, state, postal_code, country]
+              properties:
+                line1: { type: string }
+                line2: { type: string }
+                city: { type: string }
+                state: { type: string }
+                postal_code: { type: string }
+                country: { type: string, minLength: 2, maxLength: 2 }
+                phone: { type: string }
+                is_default: { type: boolean }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+        '404': { description: User not found }
+    get:
+      summary: List addresses
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    line1: { type: string }
+                    line2: { type: string, nullable: true }
+                    city: { type: string }
+                    state: { type: string }
+                    postal_code: { type: string }
+                    country: { type: string }
+                    phone: { type: string, nullable: true }
+                    is_default: { type: boolean }
+        '404': { description: User not found }
+  /api/v1/users/{userId}/addresses/{addressId}:
+    put:
+      summary: Update address
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: addressId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                line1: { type: string }
+                line2: { type: string }
+                city: { type: string }
+                state: { type: string }
+                postal_code: { type: string }
+                country: { type: string }
+                phone: { type: string }
+                is_default: { type: boolean }
+      responses:
+        '200': { description: Updated }
+        '404': { description: Address not found }
+    delete:
+      summary: Delete address
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: addressId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Address not found }
   /health:
     get:
       summary: Health check

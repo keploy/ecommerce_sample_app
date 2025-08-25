@@ -32,6 +32,26 @@
           ]
         },
         {
+          "name": "Add address (default)",
+          "request": {
+            "method": "POST",
+            "header": [{"key":"Content-Type","value":"application/json"}],
+            "url": {"raw":"{{user_base}}/users/{{last_user_id}}/addresses","host":["{{user_base}}"],"path":["users","{{last_user_id}}","addresses"]},
+            "body": {"mode":"raw","raw":"{\n  \"line1\": \"1 Main St\",\n  \"city\": \"NYC\",\n  \"state\": \"NY\",\n  \"postal_code\": \"10001\",\n  \"country\": \"US\",\n  \"phone\": \"+1-555-0000\",\n  \"is_default\": true\n}"}
+          },
+          "event":[{"listen":"test","script":{"exec":[
+            "pm.test('address created', function(){ pm.expect([200,201]).to.include(pm.response.code); });",
+            "var j={}; try{ j=pm.response.json(); }catch(e){}; if (j.id){ pm.environment.set('last_address_id', j.id); }"
+          ],"type":"text/javascript"}}]
+        },
+        {
+          "name": "List addresses",
+          "request": {"method":"GET","url":{"raw":"{{user_base}}/users/{{last_user_id}}/addresses","host":["{{user_base}}"],"path":["users","{{last_user_id}}","addresses"]}},
+          "event":[{"listen":"test","script":{"exec":[
+            "pm.test('addresses listed', function(){ pm.expect(pm.response.code).to.eql(200); });"
+          ],"type":"text/javascript"}}]
+        },
+        {
           "name": "Get user",
           "request": {"method":"GET","url":{"raw":"{{user_base}}/users/{{last_user_id}}","host":["{{user_base}}"],"path":["users","{{last_user_id}}"]}},
           "event": [{"listen":"test","script":{"exec":[
@@ -84,7 +104,7 @@
               {"key":"Idempotency-Key","value":"{{idempotency_key}}"}
             ],
             "url": {"raw":"{{order_base}}/orders","host":["{{order_base}}"],"path":["orders"]},
-            "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{laptop_id}}\", \"quantity\": 1 } ]\n}"}
+            "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{laptop_id}}\", \"quantity\": 1 } ],\n  \"shippingAddress\": { \n    \"line1\": \"1 Main St\", \n    \"city\": \"NYC\", \n    \"state\": \"NY\", \n    \"postal_code\": \"10001\", \n    \"country\": \"US\", \n    \"phone\": \"+1-555-0000\" \n  }\n}"}
           },
           "event": [
             {"listen":"prerequest","script":{"exec":[
@@ -93,6 +113,26 @@
             {"listen":"test","script":{"exec":[
               "pm.test('order created', function(){ pm.expect([200,201]).to.include(pm.response.code); });",
               "var j={}; try{ j=pm.response.json(); }catch(e){}; if (j.id){ pm.environment.set('last_order_id', j.id); }"
+            ],"type":"text/javascript"}}
+          ]
+        },
+        {
+          "name": "Create order (fallback default addr)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Content-Type","value":"application/json"},
+              {"key":"Idempotency-Key","value":"{{idempotency_key}}"}
+            ],
+            "url": {"raw":"{{order_base}}/orders","host":["{{order_base}}"],"path":["orders"]},
+            "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{mouse_id}}\", \"quantity\": 1 } ]\n}"}
+          },
+          "event": [
+            {"listen":"prerequest","script":{"exec":[
+              "pm.environment.set('idempotency_key', pm.variables.replaceIn('{{$guid}}'));"
+            ],"type":"text/javascript"}},
+            {"listen":"test","script":{"exec":[
+              "pm.test('order created', function(){ pm.expect([200,201]).to.include(pm.response.code); });"
             ],"type":"text/javascript"}}
           ]
         },

@@ -26,11 +26,10 @@ APIs
 
 This repo contains three Python (Flask) microservices orchestrated with Docker Compose, each with its own MySQL database, plus LocalStack SQS for messaging.
 
+# E-commerce Microservices (Python/Flask + MySQL + SQS)
+
 ## Component view
 
-```mermaid
-flowchart LR
-    subgraph Clients
       client[Client / Postman]
     end
 
@@ -48,22 +47,14 @@ flowchart LR
     end
 
     client -->|HTTP| order
-    client -->|HTTP| product
-    client -->|HTTP| user
 
-  order -->|GET /users/:id| user
-  order -->|GET /products/:id| product
-  order -->|POST /products/:id/reserve| product
-  order -->|POST /products/:id/release| product
+order -->|GET /users/:id| user
+order -->|GET /products/:id| product
+user -->|MySQL| dbusers
 
-    order -->|MySQL| dborders
-    product -->|MySQL| dbproducts
-    user -->|MySQL| dbusers
-
-    order -->|SQS send\norder_created| sqs
-    order -->|SQS send\norder_paid| sqs
     order -->|SQS send\norder_cancelled| sqs
-```
+
+````
 
 Key behaviors
 
@@ -74,9 +65,6 @@ Key behaviors
 ## Sequence: Place Order
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    participant C as Client
     participant O as Order Service
     participant U as User Service
     participant P as Product Service
@@ -95,7 +83,7 @@ sequenceDiagram
       O->>Q: Send message (eventType: order_created, ...)
       O-->>C: 201 (id, status: PENDING)
     end
-```
+````
 
 ## Sequence: Pay / Cancel Order
 
@@ -161,4 +149,3 @@ sequenceDiagram
 
 - Docker Compose brings up three MySQL instances, three services, and LocalStack SQS.
 - Idempotency check is performed before external calls to avoid double reservation on retries.
-

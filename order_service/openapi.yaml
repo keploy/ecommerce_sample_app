@@ -39,6 +39,17 @@ paths:
                       quantity:
                         type: integer
                         minimum: 1
+                shippingAddress:
+                  type: object
+                  nullable: true
+                  properties:
+                    line1: { type: string }
+                    line2: { type: string }
+                    city: { type: string }
+                    state: { type: string }
+                    postal_code: { type: string }
+                    country: { type: string }
+                    phone: { type: string }
       responses:
         '201':
           description: Created
@@ -133,6 +144,9 @@ paths:
                     type: string
                   total_amount:
                     type: number
+                  shipping_address:
+                    type: object
+                    nullable: true
                   created_at:
                     type: string
                     format: date-time
