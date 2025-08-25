@@ -1,0 +1,181 @@
+openapi: 3.1.0
+info:
+  title: Product Service API
+  version: 1.0.0
+paths:
+  /api/v1/products:
+    get:
+      summary: List products
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+    post:
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, price, stock]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                price: { type: number, format: float }
+                stock: { type: integer, minimum: 0 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+  /api/v1/products/{productId}:
+    get:
+      summary: Get product by ID
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404': { description: Not found }
+    put:
+      summary: Update product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                price: { type: number, format: float }
+                stock: { type: integer, minimum: 0 }
+      responses:
+        '200': { description: Updated }
+        '400': { description: Bad request }
+        '404': { description: Not found }
+    delete:
+      summary: Delete product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Not found }
+  /api/v1/products/{productId}/reserve:
+    post:
+      summary: Reserve stock for a product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Reserved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reserved: { type: integer }
+                  stock: { type: integer }
+        '409': { description: Insufficient stock }
+  /api/v1/products/{productId}/release:
+    post:
+      summary: Release stock for a product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  released: { type: integer }
+                  stock: { type: integer }
+        '404': { description: Not found }
+  /api/v1/products/search:
+    get:
+      summary: Search products
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: minPrice
+          schema: { type: number, format: float }
+        - in: query
+          name: maxPrice
+          schema: { type: number, format: float }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: OK }
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        price: { type: number, format: float }
+        stock: { type: integer }

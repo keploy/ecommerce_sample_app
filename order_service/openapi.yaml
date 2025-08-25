@@ -1,0 +1,192 @@
+openapi: 3.1.0
+info:
+  title: Order Service API
+  version: 1.0.0
+paths:
+  /api/v1/orders:
+    post:
+      summary: Create order
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            maxLength: 64
+          description: Prevent duplicate order creation. If provided, repeated requests return the same order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+                - items
+              properties:
+                userId:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - productId
+                      - quantity
+                    properties:
+                      productId:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [PENDING, PAID, CANCELLED]
+        '200':
+          description: Returned existing order for idempotent request
+        '400':
+          description: Bad request
+        '503':
+          description: Dependency unavailable
+    get:
+      summary: List orders
+      parameters:
+        - in: query
+          name: userId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, PAID, CANCELLED]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        user_id:
+                          type: string
+                        status:
+                          type: string
+                        total_amount:
+                          type: number
+                        created_at:
+                          type: string
+                          format: date-time
+                  nextCursor:
+                    type: string
+                    nullable: true
+  /api/v1/orders/{orderId}:
+    get:
+      summary: Get order by ID
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  user_id:
+                    type: string
+                  status:
+                    type: string
+                  total_amount:
+                    type: number
+                  created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product_id:
+                          type: string
+                        quantity:
+                          type: integer
+                        price:
+                          type: number
+        '404':
+          description: Not found
+  /api/v1/orders/{orderId}/cancel:
+    post:
+      summary: Cancel order
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancelled
+        '404':
+          description: Not found
+        '409':
+          description: Conflict
+  /api/v1/orders/{orderId}/pay:
+    post:
+      summary: Mark order paid
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paid
+        '404':
+          description: Not found
+        '409':
+          description: Conflict
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK

@@ -1,0 +1,154 @@
+{
+  "info": {
+    "name": "E-commerce Microservices",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "f0b6b9de-6f3b-4d5a-8a8c-6d2cd2a56789"
+  },
+  "item": [
+    {
+      "name": "User Service",
+      "item": [
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Content-Type","value":"application/json"}
+            ],
+            "url": {"raw": "{{user_base}}/users","host":["{{user_base}}"],"path":["users"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"p@ssw0rd\"\n}"
+            }
+          },
+          "event": [
+            {"listen":"test","script":{"exec":[
+              "pm.test('user created', function(){",
+              "  pm.expect([200,201]).to.include(pm.response.code);",
+              "});",
+              "var json = {}; try { json = pm.response.json(); } catch(e){}",
+              "if (json.id) { pm.environment.set('last_user_id', json.id); }"
+            ],"type":"text/javascript"}}
+          ]
+        },
+        {
+          "name": "Get user",
+          "request": {"method":"GET","url":{"raw":"{{user_base}}/users/{{last_user_id}}","host":["{{user_base}}"],"path":["users","{{last_user_id}}"]}},
+          "event": [{"listen":"test","script":{"exec":[
+            "pm.test('user fetched', function(){ pm.expect(pm.response.code).to.eql(200); });"
+          ],"type":"text/javascript"}}]
+        },
+        {
+          "name": "Login",
+          "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{user_base}}/login","host":["{{user_base}}"],"path":["login"]},"body":{"mode":"raw","raw":"{\n  \"username\": \"{{username}}\",\n  \"password\": \"p@ssw0rd\"\n}"}},
+          "event": [{"listen":"test","script":{"exec":[
+            "pm.test('login ok', function(){ pm.expect(pm.response.code).to.eql(200); });"
+          ],"type":"text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "Product Service",
+      "event": [
+        {"listen":"prerequest","script":{"exec":[
+          "if (!pm.environment.get('laptop_id') || !pm.environment.get('mouse_id')) {",
+          "  // Fetch products once to seed IDs",
+          "  pm.sendRequest({ url: pm.environment.get('product_base') + '/products', method: 'GET' }, function(err, res) {",
+          "    if (!err) {",
+          "      var arr = res.json();",
+          "      if (arr && arr.length) {",
+          "        pm.environment.set('laptop_id', arr[0].id);",
+          "        if (arr.length > 1) pm.environment.set('mouse_id', arr[1].id);",
+          "      }",
+          "    }",
+          "  });",
+          "}"
+        ],"type":"text/javascript"}}
+      ],
+      "item": [
+        {"name":"List products","request":{"method":"GET","url":{"raw":"{{product_base}}/products","host":["{{product_base}}"],"path":["products"]}}},
+        {"name":"Get product (laptop)","request":{"method":"GET","url":{"raw":"{{product_base}}/products/{{laptop_id}}","host":["{{product_base}}"],"path":["products","{{laptop_id}}"]}}},
+        {"name":"Reserve laptop","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{product_base}}/products/{{laptop_id}}/reserve","host":["{{product_base}}"],"path":["products","{{laptop_id}}","reserve"]},"body":{"mode":"raw","raw":"{\n  \"quantity\": 1\n}"}}},
+        {"name":"Release laptop","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{product_base}}/products/{{laptop_id}}/release","host":["{{product_base}}"],"path":["products","{{laptop_id}}","release"]},"body":{"mode":"raw","raw":"{\n  \"quantity\": 1\n}"}}}
+      ]
+    },
+    {
+      "name": "Order Service",
+      "item": [
+        {
+          "name": "Create order (laptop x1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Content-Type","value":"application/json"},
+              {"key":"Idempotency-Key","value":"{{idempotency_key}}"}
+            ],
+            "url": {"raw":"{{order_base}}/orders","host":["{{order_base}}"],"path":["orders"]},
+            "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{laptop_id}}\", \"quantity\": 1 } ]\n}"}
+          },
+          "event": [
+            {"listen":"prerequest","script":{"exec":[
+              "if (!pm.environment.get('idempotency_key')) { pm.environment.set('idempotency_key', pm.variables.replaceIn('{{$guid}}')); }"
+            ],"type":"text/javascript"}},
+            {"listen":"test","script":{"exec":[
+              "pm.test('order created', function(){ pm.expect([200,201]).to.include(pm.response.code); });",
+              "var j={}; try{ j=pm.response.json(); }catch(e){}; if (j.id){ pm.environment.set('last_order_id', j.id); }"
+            ],"type":"text/javascript"}}
+          ]
+        },
+        {
+          "name": "List my orders",
+          "request": {"method":"GET","url":{"raw":"{{order_base}}/orders?userId={{last_user_id}}&limit=5","host":["{{order_base}}"],"path":["orders"],"query":[{"key":"userId","value":"{{last_user_id}}"},{"key":"limit","value":"5"}]}},
+          "event": [{"listen":"test","script":{"exec":[
+            "pm.test('listed', function(){ pm.expect(pm.response.code).to.eql(200); });"
+          ],"type":"text/javascript"}}]
+        },
+        {
+          "name": "Get order",
+          "request": {"method":"GET","url":{"raw":"{{order_base}}/orders/{{last_order_id}}","host":["{{order_base}}"],"path":["orders","{{last_order_id}}"]}},
+          "event": [{"listen":"test","script":{"exec":[
+            "pm.test('got order', function(){ pm.expect(pm.response.code).to.eql(200); });"
+          ],"type":"text/javascript"}}]
+        },
+        {
+          "name": "Pay order",
+          "request": {"method":"POST","url":{"raw":"{{order_base}}/orders/{{last_order_id}}/pay","host":["{{order_base}}"],"path":["orders","{{last_order_id}}","pay"]}},
+          "event": [{"listen":"test","script":{"exec":[
+            "pm.test('paid or already paid', function(){ pm.expect([200].concat([200])).to.include(pm.response.code); });"
+          ],"type":"text/javascript"}}]
+        },
+        {
+          "name": "Cancel order (expect 409 if paid)",
+          "request": {"method":"POST","url":{"raw":"{{order_base}}/orders/{{last_order_id}}/cancel","host":["{{order_base}}"],"path":["orders","{{last_order_id}}","cancel"]}},
+          "event": [{"listen":"test","script":{"exec":[
+            "pm.test('cancel response code', function(){ pm.expect([200,409,404]).to.include(pm.response.code); });"
+          ],"type":"text/javascript"}}]
+        },
+        {
+          "name": "Create order idempotent (mouse x2)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Content-Type","value":"application/json"},
+              {"key":"Idempotency-Key","value":"{{idempotency_key}}"}
+            ],
+            "url": {"raw":"{{order_base}}/orders","host":["{{order_base}}"],"path":["orders"]},
+            "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{mouse_id}}\", \"quantity\": 2 } ]\n}"}
+          },
+          "event": [
+            {"listen":"prerequest","script":{"exec":[
+              "if (!pm.environment.get('idempotency_key')) { pm.environment.set('idempotency_key', pm.variables.replaceIn('{{$guid}}')); }"
+            ],"type":"text/javascript"}},
+            {"listen":"test","script":{"exec":[
+              "pm.test('order created idempotently', function(){ pm.expect([200,201]).to.include(pm.response.code); });"
+            ],"type":"text/javascript"}}
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {"key":"username","value":"alice"},
+    {"key":"email","value":"alice@example.com"}
+  ]
+}

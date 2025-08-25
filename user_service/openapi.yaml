@@ -1,0 +1,82 @@
+openapi: 3.1.0
+info:
+  title: User Service API
+  version: 1.0.0
+paths:
+  /api/v1/users:
+    post:
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  username: { type: string }
+                  email: { type: string }
+        '400': { description: Bad request }
+  /api/v1/users/{userId}:
+    get:
+      summary: Get user
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  username: { type: string }
+                  email: { type: string }
+                  created_at: { type: string, format: date-time }
+        '404': { description: Not found }
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: OK }
+  /api/v1/login:
+    post:
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  username: { type: string }
+                  email: { type: string, format: email }
+        '401': { description: Invalid credentials }
