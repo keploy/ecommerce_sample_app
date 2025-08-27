@@ -2,4 +2,7 @@ Flask==3.0.3
 mysql-connector-python==9.0.0
 gunicorn==22.0.0
 requests==2.32.3
-boto3==1.34.162
+# Pin to versions where SQS uses the query protocol (compatible with LocalStack)
+boto3==1.28.63
+botocore==1.31.63
+PyJWT==2.8.0

@@ -2,6 +2,14 @@ openapi: 3.1.0
 info:
   title: User Service API
   version: 1.0.0
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []
 paths:
   /api/v1/users:
     post:
@@ -175,10 +183,12 @@ paths:
   /health:
     get:
       summary: Health check
+      security: []
       responses:
         '200': { description: OK }
   /api/v1/login:
     post:
+      security: []
       summary: Login
       requestBody:
         required: true
@@ -201,4 +211,5 @@ paths:
                   id: { type: string }
                   username: { type: string }
                   email: { type: string, format: email }
+                  token: { type: string, description: Bearer JWT token }
         '401': { description: Invalid credentials }

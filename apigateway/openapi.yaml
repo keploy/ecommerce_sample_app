@@ -1,0 +1,702 @@
+openapi: 3.1.0
+info:
+  title: E-commerce API Gateway
+  version: 1.1.0
+  description: Consolidated OpenAPI spec for the API Gateway proxying User, Product, and Order services.
+servers:
+  - url: http://localhost:8083
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Users
+    description: User management
+  - name: Addresses
+    description: User addresses
+  - name: Products
+    description: Product catalog and inventory
+  - name: Orders
+    description: Order management and payments
+  - name: Health
+    description: Health checks
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      description: Prevent duplicate order creation. If provided, repeated requests return the same order.
+      schema:
+        type: string
+        maxLength: 64
+  schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+        code: { type: string }
+        details: { type: object, additionalProperties: true }
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+    LoginResponse:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        email: { type: string, format: email }
+        token: { type: string, description: Bearer JWT token }
+    Address:
+      type: object
+      properties:
+        id: { type: string }
+        line1: { type: string }
+        line2: { type: string, nullable: true }
+        city: { type: string }
+        state: { type: string }
+        postal_code: { type: string }
+        country: { type: string }
+        phone: { type: string, nullable: true }
+        is_default: { type: boolean }
+    CreateAddressRequest:
+      type: object
+      required: [line1, city, state, postal_code, country]
+      properties:
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        postal_code: { type: string }
+        country: { type: string, minLength: 2, maxLength: 2 }
+        phone: { type: string }
+        is_default: { type: boolean }
+    UpdateAddressRequest:
+      type: object
+      properties:
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        postal_code: { type: string }
+        country: { type: string }
+        phone: { type: string }
+        is_default: { type: boolean }
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        email: { type: string }
+        phone: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+    CreateUserRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+        phone: { type: string }
+    Product:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        price: { type: number, format: float }
+        stock: { type: integer }
+    CreateProductRequest:
+      type: object
+      required: [name, price, stock]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        price: { type: number, format: float }
+        stock: { type: integer, minimum: 0 }
+    UpdateProductRequest:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        price: { type: number, format: float }
+        stock: { type: integer, minimum: 0 }
+    ReserveReleaseRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: { type: integer, minimum: 1 }
+    OrderStatus:
+      type: string
+      enum: [PENDING, PAID, CANCELLED]
+    OrderItem:
+      type: object
+      properties:
+        product_id: { type: string }
+        quantity: { type: integer }
+        price: { type: number }
+    Order:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        total_amount: { type: number }
+        shipping_address_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+    CreateOrderItem:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId: { type: string }
+        quantity: { type: integer, minimum: 1 }
+    CreateOrderRequest:
+      type: object
+      required: [userId, items]
+      properties:
+        userId: { type: string }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateOrderItem'
+        shippingAddressId: { type: string, nullable: true }
+    OrdersListResponse:
+      type: object
+      properties:
+        orders:
+          type: array
+          items: { $ref: '#/components/schemas/Order' }
+        nextCursor: { type: string, nullable: true }
+    OrderDetails:
+      type: object
+      properties:
+        id: { type: string }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        total_amount: { type: number }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        userId: { type: string }
+        shippingAddressId: { type: string, nullable: true }
+        shippingAddress:
+          oneOf:
+            - $ref: '#/components/schemas/Address'
+            - type: 'null'
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId: { type: string }
+              quantity: { type: integer }
+              product:
+                oneOf:
+                  - $ref: '#/components/schemas/Product'
+                  - type: 'null'
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        '200': { description: OK }
+
+  /api/v1/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # Users
+  /api/v1/users:
+    post:
+      tags: [Users]
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/users/{userId}:
+    get:
+      tags: [Users]
+      summary: Get user
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/users/{userId}/addresses:
+    get:
+      tags: [Addresses]
+      summary: List addresses
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Address' }
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    post:
+      tags: [Addresses]
+      summary: Create address
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAddressRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/users/{userId}/addresses/{addressId}:
+    put:
+      tags: [Addresses]
+      summary: Update address
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: addressId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAddressRequest' }
+      responses:
+        '200': { description: Updated }
+        '404':
+          description: Address not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Addresses]
+      summary: Delete address
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: addressId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Deleted }
+        '404':
+          description: Address not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # Products
+  /api/v1/products:
+    get:
+      tags: [Products]
+      summary: List products
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Product' }
+    post:
+      tags: [Products]
+      summary: Create product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProductRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+
+  /api/v1/products/{productId}:
+    get:
+      tags: [Products]
+      summary: Get product by ID
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    put:
+      tags: [Products]
+      summary: Update product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProductRequest' }
+      responses:
+        '200': { description: Updated }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Products]
+      summary: Delete product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Deleted }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/products/{productId}/reserve:
+    post:
+      tags: [Products]
+      summary: Reserve stock for a product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReserveReleaseRequest' }
+      responses:
+        '200':
+          description: Reserved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reserved: { type: integer }
+                  stock: { type: integer }
+        '409':
+          description: Insufficient stock
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/products/{productId}/release:
+    post:
+      tags: [Products]
+      summary: Release stock for a product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReserveReleaseRequest' }
+      responses:
+        '200':
+          description: Released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  released: { type: integer }
+                  stock: { type: integer }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/products/search:
+    get:
+      tags: [Products]
+      summary: Search products
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: minPrice
+          schema: { type: number, format: float }
+        - in: query
+          name: maxPrice
+          schema: { type: number, format: float }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Product' }
+
+  # Orders
+  /api/v1/orders:
+    post:
+      tags: [Orders]
+      summary: Create order
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrderRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { $ref: '#/components/schemas/OrderStatus' }
+        '200': { description: Returned existing order for idempotent request }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503': { description: Dependency unavailable }
+    get:
+      tags: [Orders]
+      summary: List orders
+      parameters:
+        - in: query
+          name: userId
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/OrderStatus' }
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: cursor
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrdersListResponse' }
+
+  /api/v1/orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order by ID
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/orders/{orderId}/details:
+    get:
+      tags: [Orders]
+      summary: Get order with enriched user and product details
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderDetails' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/orders/{orderId}/pay:
+    post:
+      tags: [Orders]
+      summary: Mark order paid
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Paid }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel order
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Cancelled }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }

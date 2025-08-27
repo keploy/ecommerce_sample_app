@@ -9,11 +9,21 @@
       "name": "User Service",
       "item": [
         {
+          "name": "Login (get token)",
+          "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{user_base}}/login","host":["{{user_base}}"],"path":["login"]},"body":{"mode":"raw","raw":"{\n  \"username\": \"{{username}}\",\n  \"password\": \"p@ssw0rd\"\n}"}},
+          "event":[{"listen":"test","script":{"exec":[
+            "var j={}; try{ j=pm.response.json(); }catch(e){};",
+            "if (j.token) pm.environment.set('jwt', j.token);",
+            "pm.test('got token', function(){ pm.expect(!!pm.environment.get('jwt')).to.be.true; });"
+          ],"type":"text/javascript"}}]
+        },
+        {
           "name": "Create user",
           "request": {
             "method": "POST",
             "header": [
-              {"key":"Content-Type","value":"application/json"}
+              {"key":"Content-Type","value":"application/json"},
+              {"key":"Authorization","value":"Bearer {{jwt}}"}
             ],
             "url": {"raw": "{{user_base}}/users","host":["{{user_base}}"],"path":["users"]},
             "body": {
@@ -35,7 +45,7 @@
           "name": "Add address (default)",
           "request": {
             "method": "POST",
-            "header": [{"key":"Content-Type","value":"application/json"}],
+            "header": [{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{jwt}}"}],
             "url": {"raw":"{{user_base}}/users/{{last_user_id}}/addresses","host":["{{user_base}}"],"path":["users","{{last_user_id}}","addresses"]},
             "body": {"mode":"raw","raw":"{\n  \"line1\": \"1 Main St\",\n  \"city\": \"NYC\",\n  \"state\": \"NY\",\n  \"postal_code\": \"10001\",\n  \"country\": \"US\",\n  \"phone\": \"+1-555-0000\",\n  \"is_default\": true\n}"}
           },
@@ -46,14 +56,14 @@
         },
         {
           "name": "List addresses",
-          "request": {"method":"GET","url":{"raw":"{{user_base}}/users/{{last_user_id}}/addresses","host":["{{user_base}}"],"path":["users","{{last_user_id}}","addresses"]}},
+          "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{user_base}}/users/{{last_user_id}}/addresses","host":["{{user_base}}"],"path":["users","{{last_user_id}}","addresses"]}},
           "event":[{"listen":"test","script":{"exec":[
             "pm.test('addresses listed', function(){ pm.expect(pm.response.code).to.eql(200); });"
           ],"type":"text/javascript"}}]
         },
         {
           "name": "Get user",
-          "request": {"method":"GET","url":{"raw":"{{user_base}}/users/{{last_user_id}}","host":["{{user_base}}"],"path":["users","{{last_user_id}}"]}},
+          "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{user_base}}/users/{{last_user_id}}","host":["{{user_base}}"],"path":["users","{{last_user_id}}"]}},
           "event": [{"listen":"test","script":{"exec":[
             "pm.test('user fetched', function(){ pm.expect(pm.response.code).to.eql(200); });"
           ],"type":"text/javascript"}}]
@@ -86,10 +96,10 @@
         ],"type":"text/javascript"}}
       ],
       "item": [
-        {"name":"List products","request":{"method":"GET","url":{"raw":"{{product_base}}/products","host":["{{product_base}}"],"path":["products"]}}},
-        {"name":"Get product (laptop)","request":{"method":"GET","url":{"raw":"{{product_base}}/products/{{laptop_id}}","host":["{{product_base}}"],"path":["products","{{laptop_id}}"]}}},
-        {"name":"Reserve laptop","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{product_base}}/products/{{laptop_id}}/reserve","host":["{{product_base}}"],"path":["products","{{laptop_id}}","reserve"]},"body":{"mode":"raw","raw":"{\n  \"quantity\": 1\n}"}}},
-        {"name":"Release laptop","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{product_base}}/products/{{laptop_id}}/release","host":["{{product_base}}"],"path":["products","{{laptop_id}}","release"]},"body":{"mode":"raw","raw":"{\n  \"quantity\": 1\n}"}}}
+  {"name":"List products","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{product_base}}/products","host":["{{product_base}}"],"path":["products"]}}},
+  {"name":"Get product (laptop)","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{product_base}}/products/{{laptop_id}}","host":["{{product_base}}"],"path":["products","{{laptop_id}}"]}}},
+  {"name":"Reserve laptop","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{product_base}}/products/{{laptop_id}}/reserve","host":["{{product_base}}"],"path":["products","{{laptop_id}}","reserve"]},"body":{"mode":"raw","raw":"{\n  \"quantity\": 1\n}"}}},
+  {"name":"Release laptop","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"},{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{product_base}}/products/{{laptop_id}}/release","host":["{{product_base}}"],"path":["products","{{laptop_id}}","release"]},"body":{"mode":"raw","raw":"{\n  \"quantity\": 1\n}"}}}
       ]
     },
     {
@@ -101,10 +111,11 @@
             "method": "POST",
             "header": [
               {"key":"Content-Type","value":"application/json"},
-              {"key":"Idempotency-Key","value":"{{idempotency_key}}"}
+              {"key":"Idempotency-Key","value":"{{idempotency_key}}"},
+              {"key":"Authorization","value":"Bearer {{jwt}}"}
             ],
             "url": {"raw":"{{order_base}}/orders","host":["{{order_base}}"],"path":["orders"]},
-            "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{laptop_id}}\", \"quantity\": 1 } ],\n  \"shippingAddress\": { \n    \"line1\": \"1 Main St\", \n    \"city\": \"NYC\", \n    \"state\": \"NY\", \n    \"postal_code\": \"10001\", \n    \"country\": \"US\", \n    \"phone\": \"+1-555-0000\" \n  }\n}"}
+            "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{laptop_id}}\", \"quantity\": 1 } ],\n  \"shippingAddressId\": \"{{last_address_id}}\"\n}"}
           },
           "event": [
             {"listen":"prerequest","script":{"exec":[
@@ -122,7 +133,8 @@
             "method": "POST",
             "header": [
               {"key":"Content-Type","value":"application/json"},
-              {"key":"Idempotency-Key","value":"{{idempotency_key}}"}
+              {"key":"Idempotency-Key","value":"{{idempotency_key}}"},
+              {"key":"Authorization","value":"Bearer {{jwt}}"}
             ],
             "url": {"raw":"{{order_base}}/orders","host":["{{order_base}}"],"path":["orders"]},
             "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{mouse_id}}\", \"quantity\": 1 } ]\n}"}
@@ -138,28 +150,35 @@
         },
         {
           "name": "List my orders",
-          "request": {"method":"GET","url":{"raw":"{{order_base}}/orders?userId={{last_user_id}}&limit=5","host":["{{order_base}}"],"path":["orders"],"query":[{"key":"userId","value":"{{last_user_id}}"},{"key":"limit","value":"5"}]}},
+          "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{order_base}}/orders?userId={{last_user_id}}&limit=5","host":["{{order_base}}"],"path":["orders"],"query":[{"key":"userId","value":"{{last_user_id}}"},{"key":"limit","value":"5"}]}},
           "event": [{"listen":"test","script":{"exec":[
             "pm.test('listed', function(){ pm.expect(pm.response.code).to.eql(200); });"
           ],"type":"text/javascript"}}]
         },
         {
           "name": "Get order",
-          "request": {"method":"GET","url":{"raw":"{{order_base}}/orders/{{last_order_id}}","host":["{{order_base}}"],"path":["orders","{{last_order_id}}"]}},
+          "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{order_base}}/orders/{{last_order_id}}","host":["{{order_base}}"],"path":["orders","{{last_order_id}}"]}},
           "event": [{"listen":"test","script":{"exec":[
             "pm.test('got order', function(){ pm.expect(pm.response.code).to.eql(200); });"
           ],"type":"text/javascript"}}]
         },
         {
+          "name": "Get order details (enriched)",
+          "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{order_base}}/orders/{{last_order_id}}/details","host":["{{order_base}}"],"path":["orders","{{last_order_id}}","details"]}},
+          "event": [{"listen":"test","script":{"exec":[
+            "pm.test('got details', function(){ pm.expect(pm.response.code).to.eql(200); });"
+          ],"type":"text/javascript"}}]
+        },
+        {
           "name": "Pay order",
-          "request": {"method":"POST","url":{"raw":"{{order_base}}/orders/{{last_order_id}}/pay","host":["{{order_base}}"],"path":["orders","{{last_order_id}}","pay"]}},
+          "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{order_base}}/orders/{{last_order_id}}/pay","host":["{{order_base}}"],"path":["orders","{{last_order_id}}","pay"]}},
           "event": [{"listen":"test","script":{"exec":[
             "pm.test('paid or already paid', function(){ pm.expect([200].concat([200])).to.include(pm.response.code); });"
           ],"type":"text/javascript"}}]
         },
         {
           "name": "Cancel order (expect 409 if paid)",
-          "request": {"method":"POST","url":{"raw":"{{order_base}}/orders/{{last_order_id}}/cancel","host":["{{order_base}}"],"path":["orders","{{last_order_id}}","cancel"]}},
+          "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{order_base}}/orders/{{last_order_id}}/cancel","host":["{{order_base}}"],"path":["orders","{{last_order_id}}","cancel"]}},
           "event": [{"listen":"test","script":{"exec":[
             "pm.test('cancel response code', function(){ pm.expect([200,409,404]).to.include(pm.response.code); });"
           ],"type":"text/javascript"}}]
@@ -170,7 +189,8 @@
             "method": "POST",
             "header": [
               {"key":"Content-Type","value":"application/json"},
-              {"key":"Idempotency-Key","value":"{{idempotency_key}}"}
+              {"key":"Idempotency-Key","value":"{{idempotency_key}}"},
+              {"key":"Authorization","value":"Bearer {{jwt}}"}
             ],
             "url": {"raw":"{{order_base}}/orders","host":["{{order_base}}"],"path":["orders"]},
             "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{last_user_id}}\",\n  \"items\": [ { \"productId\": \"{{mouse_id}}\", \"quantity\": 2 } ]\n}"}
@@ -188,7 +208,10 @@
     }
   ],
   "variable": [
-    {"key":"username","value":"alice"},
-    {"key":"email","value":"alice@example.com"}
+  {"key":"username","value":"alice"},
+  {"key":"email","value":"alice@example.com"},
+  {"key":"user_base","value":"http://localhost:8082/api/v1"},
+  {"key":"product_base","value":"http://localhost:8081/api/v1"},
+  {"key":"order_base","value":"http://localhost:8080/api/v1"}
   ]
 }

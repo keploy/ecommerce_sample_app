@@ -26,126 +26,80 @@ APIs
 
 This repo contains three Python (Flask) microservices orchestrated with Docker Compose, each with its own MySQL database, plus LocalStack SQS for messaging.
 
-# E-commerce Microservices (Python/Flask + MySQL + SQS)
+## Architecture (single diagram)
 
-## Component view
+```mermaid
+flowchart LR
+  client([Client / Postman])
 
-      client[Client / Postman]
-    end
+  subgraph "Order Service :8080"
+    order_svc([Order Service])
+    o1["POST /api/v1/orders"]
+    o2["GET /api/v1/orders"]
+    o3["GET /api/v1/orders/{id}"]
+    o4["GET /api/v1/orders/{id}/details"]
+    o5["POST /api/v1/orders/{id}/pay"]
+    o6["POST /api/v1/orders/{id}/cancel"]
+    o7["GET /health"]
+    order_svc --- o1
+    order_svc --- o2
+    order_svc --- o3
+    order_svc --- o4
+    order_svc --- o5
+    order_svc --- o6
+    order_svc --- o7
+  end
 
-    subgraph Services
-      order[Order Service\n:8080]
-      product[Product Service\n:8081]
-      user[User Service\n:8082]
-    end
+  subgraph "Product Service :8081"
+    product_svc([Product Service])
+    p1["CRUD /api/v1/products"]
+    p2["POST /api/v1/products/{id}/reserve"]
+    p3["POST /api/v1/products/{id}/release"]
+    p4["GET /api/v1/products/search"]
+    p5["GET /health"]
+    product_svc --- p1
+    product_svc --- p2
+    product_svc --- p3
+    product_svc --- p4
+    product_svc --- p5
+  end
 
-    subgraph Datastores
-      dborders[(MySQL\norder_db)]
-      dbproducts[(MySQL\nproduct_db)]
-      dbusers[(MySQL\nuser_db)]
-      sqs[(LocalStack SQS\nqueue: order-events)]
-    end
+  subgraph "User Service :8082"
+    user_svc([User Service])
+    u1["POST /api/v1/users"]
+    u2["GET /api/v1/users/{id}"]
+    u3["POST /api/v1/login"]
+    u4["GET /health"]
+    user_svc --- u1
+    user_svc --- u2
+    user_svc --- u3
+    user_svc --- u4
+  end
 
-    client -->|HTTP| order
+  subgraph Datastores
+    dborders[(MySQL order_db)]
+    dbproducts[(MySQL product_db)]
+    dbusers[(MySQL user_db)]
+  end
 
-order -->|GET /users/:id| user
-order -->|GET /products/:id| product
-user -->|MySQL| dbusers
+  sqs[(LocalStack SQS: order-events)]
 
-    order -->|SQS send\norder_cancelled| sqs
+  client --> order_svc
+  client --> product_svc
+  client --> user_svc
 
-````
+  order_svc --> dborders
+  product_svc --> dbproducts
+  user_svc --> dbusers
+
+  order_svc --> user_svc
+  order_svc --> product_svc
+
+  order_svc --> sqs
+```
 
 Key behaviors
 
 - Order creation validates user and products, reserves stock, persists order + items, emits SQS event.
 - Idempotency: POST /orders supports Idempotency-Key to avoid duplicate orders.
 - Status transitions: PENDING → PAID or CANCELLED (cancel releases stock).
-
-## Sequence: Place Order
-
-```mermaid
-    participant O as Order Service
-    participant U as User Service
-    participant P as Product Service
-    participant D as Orders DB
-    participant Q as SQS
-
-    C->>O: POST /orders (Idempotency-Key)
-    O->>D: SELECT by idempotency_key
-    alt Existing order
-      O-->>C: 200 (id, status)
-    else New order
-      O->>U: GET /users/:userId
-      O->>P: GET /products/:id (each item)
-      O->>P: POST /products/:id/reserve (each item)
-      O->>D: INSERT orders, order_items (with total_amount)
-      O->>Q: Send message (eventType: order_created, ...)
-      O-->>C: 201 (id, status: PENDING)
-    end
-````
-
-## Sequence: Pay / Cancel Order
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as Client
-    participant O as Order Service
-    participant P as Product Service
-    participant D as Orders DB
-    participant Q as SQS
-
-    rect rgb(235, 255, 235)
-  C->>O: POST /orders/:id/pay
-    O->>D: SELECT status FOR UPDATE
-    alt Already PAID
-      O-->>C: 200 PAID
-    else Cancelled
-      O-->>C: 409 Cannot pay cancelled
-    else Pending
-      O->>D: UPDATE status=PAID
-      O->>Q: Send order_paid
-      O-->>C: 200 PAID
-    end
-    end
-
-    rect rgb(255, 240, 240)
-  C->>O: POST /orders/:id/cancel
-    O->>D: SELECT status FOR UPDATE
-    alt Already CANCELLED
-      O-->>C: 200 CANCELLED
-    else PAID
-      O-->>C: 409 Cannot cancel paid
-    else Pending
-      O->>D: SELECT items
-  O->>P: POST /products/:id/release (each item)
-      O->>D: UPDATE status=CANCELLED
-      O->>Q: Send order_cancelled
-      O-->>C: 200 CANCELLED
-    end
-    end
-```
-
-## Data model (simplified)
-
-- users: id, username, email, password_hash, created_at, updated_at
-- products: id, name, description, price, stock, created_at, updated_at
-- orders: id, user_id, status(PENDING|PAID|CANCELLED), idempotency_key(uniq), total_amount, created_at, updated_at
-- order_items: id, order_id, product_id, quantity, price
-
-## Ports and endpoints
-
-- User Service (8082): POST /api/v1/users, GET /api/v1/users/{id}, POST /api/v1/login, GET /health
-- Product Service (8081): CRUD /api/v1/products, reserve/release, search, GET /health
-- Order Service (8080): POST/GET /api/v1/orders, GET /api/v1/orders/{id}, POST /api/v1/orders/{id}/pay|cancel, GET /health
-
-## Messaging
-
-- LocalStack SQS (4566) with queue order-events.
-- Events: order_created, order_paid, order_cancelled (JSON payloads).
-
-## Notes
-
-- Docker Compose brings up three MySQL instances, three services, and LocalStack SQS.
-- Idempotency check is performed before external calls to avoid double reservation on retries.

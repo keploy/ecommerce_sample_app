@@ -2,8 +2,32 @@ import os
 import uuid
 import mysql.connector
 from flask import Flask, jsonify, request
+import jwt
 
 app = Flask(__name__)
+JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-change-me')
+JWT_ALG = 'HS256'
+
+from functools import wraps
+
+def _auth_ok():
+    auth = request.headers.get('Authorization') or ''
+    if not auth.startswith('Bearer '):
+        return False
+    token = auth.split(' ', 1)[1].strip()
+    try:
+        jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        return True
+    except Exception:
+        return False
+
+def require_auth(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not _auth_ok():
+            return jsonify({'error': 'Unauthorized'}), 401
+        return fn(*args, **kwargs)
+    return wrapper
 
 
 def get_db_connection():
@@ -20,7 +44,40 @@ def get_db_connection():
         return None
 
 
+def ensure_seed():
+    """Insert sample products if table is empty. Idempotent."""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT COUNT(*) AS cnt FROM products")
+        row = cur.fetchone() or {"cnt": 0}
+        if int(row["cnt"]) == 0:
+            cur2 = conn.cursor()
+            import uuid as _uuid
+            cur2.execute(
+                "INSERT INTO products (id, name, description, price, stock) VALUES (%s,%s,%s,%s,%s)",
+                (str(_uuid.uuid4()), 'Laptop', 'A powerful and portable laptop.', 1200.00, 50)
+            )
+            cur2.execute(
+                "INSERT INTO products (id, name, description, price, stock) VALUES (%s,%s,%s,%s,%s)",
+                (str(_uuid.uuid4()), 'Mouse', 'An ergonomic wireless mouse.', 25.50, 200)
+            )
+            conn.commit()
+            cur2.close()
+        cur.close(); conn.close()
+    except Exception:
+        # best-effort; ignore failures (e.g., during early startup)
+        pass
+
+
+# Best-effort seed at import time (DB is healthy via depends_on)
+ensure_seed()
+
+
 @app.route('/api/v1/products', methods=['GET'])
+@require_auth
 def get_products():
     conn = get_db_connection()
     if not conn:
@@ -34,6 +91,7 @@ def get_products():
 
 
 @app.route('/api/v1/products/<string:product_id>', methods=['GET'])
+@require_auth
 def get_product(product_id):
     conn = get_db_connection()
     if not conn:
@@ -50,6 +108,7 @@ def get_product(product_id):
 
 
 @app.route('/api/v1/products', methods=['POST'])
+@require_auth
 def create_product():
     data = request.get_json(silent=True) or {}
     required = ('name', 'price', 'stock')
@@ -83,6 +142,7 @@ def create_product():
 
 
 @app.route('/api/v1/products/<string:product_id>/reserve', methods=['POST'])
+@require_auth
 def reserve_stock(product_id):
     data = request.get_json(silent=True) or {}
     qty = int(data.get('quantity', 0))
@@ -119,6 +179,7 @@ def reserve_stock(product_id):
 
 
 @app.route('/api/v1/products/<string:product_id>/release', methods=['POST'])
+@require_auth
 def release_stock(product_id):
     data = request.get_json(silent=True) or {}
     qty = int(data.get('quantity', 0))
@@ -159,6 +220,7 @@ def health():
 
 
 @app.route('/api/v1/products/<string:product_id>', methods=['PUT'])
+@require_auth
 def update_product(product_id):
     data = request.get_json(silent=True) or {}
     fields = {}
@@ -205,6 +267,7 @@ def update_product(product_id):
 
 
 @app.route('/api/v1/products/<string:product_id>', methods=['DELETE'])
+@require_auth
 def delete_product(product_id):
     conn = get_db_connection()
     if not conn:
@@ -225,6 +288,7 @@ def delete_product(product_id):
 
 
 @app.route('/api/v1/products/search', methods=['GET'])
+@require_auth
 def search_products():
     q = (request.args.get('q') or '').strip()
     min_price = request.args.get('minPrice')

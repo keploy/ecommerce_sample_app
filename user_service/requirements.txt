@@ -2,3 +2,4 @@ Flask==3.0.3
 mysql-connector-python==9.0.0
 gunicorn==22.0.0
 Werkzeug==3.0.3
+PyJWT==2.8.0

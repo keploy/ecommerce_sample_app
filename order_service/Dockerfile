@@ -1,7 +1,11 @@
 FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt ./
+ADD  https://raw.githubusercontent.com/keploy/keploy/refs/heads/main/pkg/core/proxy/tls/asset/ca.crt ca.crt
+ADD  https://raw.githubusercontent.com/keploy/keploy/refs/heads/main/pkg/core/proxy/tls/asset/setup_ca.sh setup_ca.sh
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+RUN chmod +x /app/entrypoint.sh
 ENV FLASK_RUN_HOST=0.0.0.0
-CMD ["python", "app.py"]
+ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
+

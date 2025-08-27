@@ -2,6 +2,14 @@ openapi: 3.1.0
 info:
   title: Order Service API
   version: 1.0.0
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []
 paths:
   /api/v1/orders:
     post:
@@ -39,17 +47,9 @@ paths:
                       quantity:
                         type: integer
                         minimum: 1
-                shippingAddress:
-                  type: object
+                shippingAddressId:
+                  type: string
                   nullable: true
-                  properties:
-                    line1: { type: string }
-                    line2: { type: string }
-                    city: { type: string }
-                    state: { type: string }
-                    postal_code: { type: string }
-                    country: { type: string }
-                    phone: { type: string }
       responses:
         '201':
           description: Created
@@ -144,8 +144,8 @@ paths:
                     type: string
                   total_amount:
                     type: number
-                  shipping_address:
-                    type: object
+                  shipping_address_id:
+                    type: string
                     nullable: true
                   created_at:
                     type: string
@@ -166,6 +166,46 @@ paths:
                           type: number
         '404':
           description: Not found
+  /api/v1/orders/{orderId}/details:
+    get:
+      summary: Get order by ID with enriched user and product details
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string }
+                  total_amount: { type: number }
+                  created_at: { type: string, format: date-time }
+                  updated_at: { type: string, format: date-time }
+                  userId: { type: string }
+                  shippingAddressId: { type: string, nullable: true }
+                  shippingAddress:
+                    type: object
+                    nullable: true
+                  user:
+                    type: object
+                    nullable: true
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        productId: { type: string }
+                        quantity: { type: integer }
+                        product:
+                          type: object
+                          nullable: true
   /api/v1/orders/{orderId}/cancel:
     post:
       summary: Cancel order
@@ -201,6 +241,7 @@ paths:
   /health:
     get:
       summary: Health check
+      security: []
       responses:
         '200':
           description: OK

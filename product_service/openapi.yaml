@@ -2,6 +2,23 @@ openapi: 3.1.0
 info:
   title: Product Service API
   version: 1.0.0
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Product:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        price: { type: number, format: float }
+        stock: { type: integer }
+security:
+  - bearerAuth: []
 paths:
   /api/v1/products:
     get:
@@ -167,15 +184,6 @@ paths:
   /health:
     get:
       summary: Health check
+      security: []
       responses:
         '200': { description: OK }
-components:
-  schemas:
-    Product:
-      type: object
-      properties:
-        id: { type: string }
-        name: { type: string }
-        description: { type: string }
-        price: { type: number, format: float }
-        stock: { type: integer }

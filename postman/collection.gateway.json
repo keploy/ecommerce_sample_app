@@ -1,0 +1,51 @@
+{
+  "info": {
+    "name": "API Gateway - E-commerce",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login (via user service path)",
+      "request": {
+        "method": "POST",
+        "header": [ {"key":"Content-Type","value":"application/json"} ],
+        "url": {"raw":"{{gw_base}}/api/v1/login","host":["{{gw_base}}"],"path":["api","v1","login"]},
+        "body": {"mode":"raw","raw":"{\n  \"username\": \"{{username}}\",\n  \"password\": \"p@ssw0rd\"\n}"}
+      },
+      "event":[{"listen":"test","script":{"exec":[
+        "var j={}; try{ j=pm.response.json(); }catch(e){}; if (j.token) pm.environment.set('jwt', j.token);",
+        "pm.test('got token', function(){ pm.expect(!!pm.environment.get('jwt')).to.be.true; });"
+      ],"type":"text/javascript"}}]
+    },
+    {
+      "name": "Create address",
+      "request": {
+        "method": "POST",
+        "header": [ {"key":"Content-Type","value":"application/json"}, {"key":"Authorization","value":"Bearer {{jwt}}"} ],
+        "url": {"raw":"{{gw_base}}/api/v1/users/{{user_id}}/addresses","host":["{{gw_base}}"],"path":["api","v1","users","{{user_id}}","addresses"]},
+        "body": {"mode":"raw","raw":"{\n  \"line1\": \"1 Main St\",\n  \"city\": \"NYC\",\n  \"state\": \"NY\",\n  \"postal_code\": \"10001\",\n  \"country\": \"US\",\n  \"phone\": \"+1-555-0000\",\n  \"is_default\": true\n}"}
+      }
+    },
+    {
+      "name": "Create order (shippingAddressId)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Content-Type","value":"application/json"},
+          {"key":"Idempotency-Key","value":"{{idempotency_key}}"},
+          {"key":"Authorization","value":"Bearer {{jwt}}"}
+        ],
+        "url": {"raw":"{{gw_base}}/api/v1/orders","host":["{{gw_base}}"],"path":["api","v1","orders"]},
+        "body": {"mode":"raw","raw":"{\n  \"userId\": \"{{user_id}}\",\n  \"items\": [ { \"productId\": \"{{product_id}}\", \"quantity\": 1 } ],\n  \"shippingAddressId\": \"{{address_id}}\"\n}"}
+      }
+    },
+    {
+      "name": "Get order details (enriched)",
+      "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{jwt}}"}],"url":{"raw":"{{gw_base}}/api/v1/orders/{{order_id}}/details","host":["{{gw_base}}"],"path":["api","v1","orders","{{order_id}}","details"]}}
+    }
+  ],
+  "variable": [
+    {"key":"gw_base","value":"http://localhost:8083"},
+    {"key":"username","value":"alice"}
+  ]
+}

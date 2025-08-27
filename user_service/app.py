@@ -1,10 +1,81 @@
 import os
 import uuid
 import mysql.connector
+import datetime
+import jwt
 from flask import Flask, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-change-me')
+JWT_ALG = 'HS256'
+
+# Auth helpers (must be defined before route decorators)
+from functools import wraps
+
+def _get_auth_user_id():
+    auth = request.headers.get('Authorization') or ''
+    if not auth.startswith('Bearer '):
+        return None
+    token = auth.split(' ', 1)[1].strip()
+    try:
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        return decoded.get('sub')
+    except Exception:
+        return None
+
+
+def require_auth(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        uid = _get_auth_user_id()
+        if not uid:
+            return jsonify({'error': 'Unauthorized'}), 401
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def ensure_seed_user():
+    """Ensure a default admin user exists; create if missing.
+    Uses ADMIN_USERNAME/ADMIN_EMAIL/ADMIN_PASSWORD env vars or defaults.
+    """
+    admin_user = os.environ.get('ADMIN_USERNAME', 'admin')
+    admin_email = os.environ.get('ADMIN_EMAIL', 'admin@example.com')
+    admin_pass = os.environ.get('ADMIN_PASSWORD', 'admin123')
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return
+        cur = conn.cursor(dictionary=True)
+        # Check by username or email, so we seed if not present even if table isn't empty
+        cur.execute("SELECT id FROM users WHERE username=%s OR email=%s LIMIT 1", (admin_user, admin_email))
+        existing = cur.fetchone()
+        cur.close()
+        if not existing:
+            cur2 = conn.cursor()
+            uid = str(uuid.uuid4())
+            cur2.execute(
+                "INSERT INTO users (id, username, email, password_hash) VALUES (%s,%s,%s,%s)",
+                (uid, admin_user, admin_email, generate_password_hash(admin_pass))
+            )
+            conn.commit(); cur2.close()
+        else:
+            # Optionally reset admin password if requested (dev convenience)
+            if str(os.environ.get('RESET_ADMIN_PASSWORD', 'false')).lower() in ('1','true','yes'):
+                cur3 = conn.cursor()
+                cur3.execute(
+                    "UPDATE users SET password_hash=%s WHERE username=%s OR email=%s",
+                    (generate_password_hash(admin_pass), admin_user, admin_email)
+                )
+                conn.commit(); cur3.close()
+        conn.close()
+    except Exception:
+        # swallow seeding errors in dev; logs go to stdout above in get_db_connection
+        pass
+
+
+# Seed default admin on startup (only if users table is empty)
+ensure_seed_user()
 
 
 def get_db_connection():
@@ -22,6 +93,7 @@ def get_db_connection():
 
 
 @app.route('/api/v1/users', methods=['POST'])
+@require_auth
 def create_user():
     data = request.get_json(silent=True) or {}
     if not all(k in data for k in ('username', 'email', 'password')):
@@ -61,6 +133,7 @@ def create_user():
 
 
 @app.route('/api/v1/users/<string:user_id>', methods=['GET'])
+@require_auth
 def get_user(user_id):
     conn = get_db_connection()
     if not conn:
@@ -82,6 +155,7 @@ def get_user(user_id):
 
 # Addresses CRUD
 @app.route('/api/v1/users/<string:user_id>/addresses', methods=['POST'])
+@require_auth
 def create_address(user_id):
     data = request.get_json(silent=True) or {}
     required = ('line1', 'city', 'state', 'postal_code', 'country')
@@ -112,6 +186,7 @@ def create_address(user_id):
 
 
 @app.route('/api/v1/users/<string:user_id>/addresses', methods=['GET'])
+@require_auth
 def list_addresses(user_id):
     conn = get_db_connection();
     if not conn:
@@ -126,6 +201,7 @@ def list_addresses(user_id):
 
 
 @app.route('/api/v1/users/<string:user_id>/addresses/<string:addr_id>', methods=['PUT'])
+@require_auth
 def update_address(user_id, addr_id):
     data = request.get_json(silent=True) or {}
     fields = {}
@@ -157,6 +233,7 @@ def update_address(user_id, addr_id):
 
 
 @app.route('/api/v1/users/<string:user_id>/addresses/<string:addr_id>', methods=['DELETE'])
+@require_auth
 def delete_address(user_id, addr_id):
     conn = get_db_connection();
     if not conn:
@@ -189,7 +266,19 @@ def login():
     conn.close()
     if not row or not check_password_hash(row['password_hash'], data['password']):
         return jsonify({'error': 'Invalid credentials'}), 401
-    return jsonify({'id': row['id'], 'username': row['username'], 'email': row['email']}), 200
+    # issue JWT
+    now = datetime.datetime.utcnow()
+    payload = {
+        'sub': row['id'],
+        'username': row['username'],
+        'iat': int(now.timestamp()),
+        'exp': int((now + datetime.timedelta(hours=2)).timestamp())
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+    return jsonify({'id': row['id'], 'username': row['username'], 'email': row['email'], 'token': token}), 200
+
+
+# (auth helpers are defined above)
 
 
 @app.route('/health', methods=['GET'])

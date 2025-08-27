@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 import requests
+import jwt
 import boto3
 import mysql.connector
 from flask import Flask, request, jsonify
@@ -10,13 +11,44 @@ app = Flask(__name__)
 
 USER_SERVICE_URL = os.environ.get('USER_SERVICE_URL', 'http://localhost:8082/api/v1')
 PRODUCT_SERVICE_URL = os.environ.get('PRODUCT_SERVICE_URL', 'http://localhost:8081/api/v1')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-change-me')
+JWT_ALG = 'HS256'
 
 SQS_QUEUE_URL = os.environ.get('SQS_QUEUE_URL')
-_endpoint = os.environ.get('AWS_ENDPOINT') or os.environ.get('AWS_ENDPOINT_URL')
-# Workaround: when using a full QueueUrl (http://host:port/acc/queue), don't override endpoint_url,
-# let boto3 use the QueueUrl host directly to avoid LocalStack query-protocol parsing issues.
-endpoint_url = None if (SQS_QUEUE_URL and SQS_QUEUE_URL.startswith('http')) else _endpoint
-sqs = boto3.client('sqs', region_name=os.environ.get('AWS_REGION', 'us-east-1'), endpoint_url=endpoint_url)
+# Always honor explicit endpoint when provided (e.g., LocalStack: http://localstack:4566)
+# For SQS, SendMessage talks to the service endpoint and passes QueueUrl as a parameter,
+# so we must set endpoint_url to hit LocalStack instead of real AWS.
+endpoint_url = os.environ.get('AWS_ENDPOINT') or os.environ.get('AWS_ENDPOINT_URL')
+sqs = boto3.client(
+    'sqs',
+    region_name=os.environ.get('AWS_REGION', 'us-east-1'),
+    endpoint_url=endpoint_url
+)
+from functools import wraps
+
+def _auth_ok():
+    auth = request.headers.get('Authorization') or ''
+    if not auth.startswith('Bearer '):
+        return False
+    token = auth.split(' ', 1)[1].strip()
+    try:
+        jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        return True
+    except Exception:
+        return False
+
+def require_auth(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not _auth_ok():
+            return jsonify({'error': 'Unauthorized'}), 401
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def _fwd_auth_headers():
+    auth = request.headers.get('Authorization')
+    return {'Authorization': auth} if auth else {}
 
 
 def get_db_connection():
@@ -61,6 +93,7 @@ def _emit_event(event_type, payload):
 
 
 @app.route('/api/v1/orders', methods=['POST'])
+@require_auth
 def create_order():
     data = request.get_json()
     if not data or not all(k in data for k in ('userId', 'items')):
@@ -68,7 +101,8 @@ def create_order():
 
     user_id = data['userId']
     items = data['items']
-    shipping_address = data.get('shippingAddress')
+    # New model: store only shippingAddressId; details are fetched from user-service on read.
+    shipping_address_id = data.get('shippingAddressId')
     idmp_key = request.headers.get('Idempotency-Key')
 
     ok, err = _validate_items(items)
@@ -90,29 +124,45 @@ def create_order():
             conn_check.close()
 
     try:
-        user_response = requests.get(f"{USER_SERVICE_URL}/users/{user_id}")
+        user_response = requests.get(f"{USER_SERVICE_URL}/users/{user_id}", headers=_fwd_auth_headers())
         if user_response.status_code != 200:
             return jsonify({'error': 'Invalid user ID'}), 400
         user_json = user_response.json()
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Could not connect to User Service: {e}'}), 503
 
-    # If shippingAddress not provided, try using user's default address from User service
-    if not shipping_address:
+    # Resolve shipping_address_id: either validate provided ID or pick default
+    def _pick_default_address_id(uid):
         try:
-            addrs_resp = requests.get(f"{USER_SERVICE_URL}/users/{user_id}/addresses")
-            if addrs_resp.status_code == 200:
-                arr = addrs_resp.json()
+            r = requests.get(f"{USER_SERVICE_URL}/users/{uid}/addresses", headers=_fwd_auth_headers(), timeout=5)
+            if r.status_code == 200:
+                arr = r.json()
                 if isinstance(arr, list) and len(arr) > 0:
-                    shipping_address = arr[0]
+                    return arr[0].get('id')
         except Exception:
-            pass
+            return None
+        return None
+
+    if shipping_address_id:
+        # Validate it belongs to the user
+        try:
+            r = requests.get(f"{USER_SERVICE_URL}/users/{user_id}/addresses", headers=_fwd_auth_headers(), timeout=5)
+            if r.status_code == 200:
+                ids = {a.get('id') for a in r.json() if isinstance(a, dict)}
+                if shipping_address_id not in ids:
+                    return jsonify({'error': 'shippingAddressId does not belong to user'}), 400
+            else:
+                return jsonify({'error': 'Failed to validate shippingAddressId'}), 400
+        except Exception:
+            return jsonify({'error': 'Failed to validate shippingAddressId'}), 400
+    else:
+        shipping_address_id = _pick_default_address_id(user_id)
 
     total_amount = 0
     for item in items:
         product_id = item['productId']
         try:
-            product_response = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}")
+            product_response = requests.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}", headers=_fwd_auth_headers())
             if product_response.status_code != 200:
                 return jsonify({'error': f'Product with ID {product_id} not found'}), 400
             product_data = product_response.json()
@@ -129,13 +179,18 @@ def create_order():
         try:
             resp = requests.post(
                 f"{PRODUCT_SERVICE_URL}/products/{item['productId']}/reserve",
-                json={'quantity': item['quantity']}
+                json={'quantity': item['quantity']},
+                headers=_fwd_auth_headers()
             )
             if resp.status_code != 200:
                 # release any previously reserved items
                 for r in reserved:
                     try:
-                        requests.post(f"{PRODUCT_SERVICE_URL}/products/{r['productId']}/release", json={'quantity': r['quantity']})
+                        requests.post(
+                            f"{PRODUCT_SERVICE_URL}/products/{r['productId']}/release",
+                            json={'quantity': r['quantity']},
+                            headers=_fwd_auth_headers()
+                        )
                     except Exception:
                         pass
                 return jsonify({'error': 'Stock reservation failed'}), resp.status_code
@@ -143,7 +198,11 @@ def create_order():
         except requests.exceptions.RequestException as e:
             for r in reserved:
                 try:
-                    requests.post(f"{PRODUCT_SERVICE_URL}/products/{r['productId']}/release", json={'quantity': r['quantity']})
+                    requests.post(
+                        f"{PRODUCT_SERVICE_URL}/products/{r['productId']}/release",
+                        json={'quantity': r['quantity']},
+                        headers=_fwd_auth_headers()
+                    )
                 except Exception:
                     pass
             return jsonify({'error': f'Could not reserve stock: {e}'}), 503
@@ -156,8 +215,8 @@ def create_order():
     order_id = str(uuid.uuid4())
     try:
         cursor.execute(
-            "INSERT INTO orders (id, user_id, status, idempotency_key, total_amount, shipping_address) VALUES (%s, %s, %s, %s, %s, %s)",
-            (order_id, user_id, 'PENDING', idmp_key, round(total_amount, 2), json.dumps(shipping_address) if shipping_address else None)
+            "INSERT INTO orders (id, user_id, status, idempotency_key, total_amount, shipping_address_id) VALUES (%s, %s, %s, %s, %s, %s)",
+            (order_id, user_id, 'PENDING', idmp_key, round(total_amount, 2), shipping_address_id)
         )
         item_params = [(order_id, i['productId'], i['quantity'], i['price']) for i in items]
         cursor.executemany(
@@ -189,6 +248,7 @@ def create_order():
 
 
 @app.route('/api/v1/orders', methods=['GET'])
+@require_auth
 def list_orders():
     # Filters: userId, status; pagination: limit, cursor(created_at, id)
     user_id = request.args.get('userId')
@@ -239,32 +299,105 @@ def list_orders():
 
 
 @app.route('/api/v1/orders/<order_id>', methods=['GET'])
+@require_auth
 def get_order(order_id):
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
     try:
         cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT id, user_id, status, total_amount, shipping_address, created_at, updated_at FROM orders WHERE id=%s", (order_id,))
+        cur.execute("SELECT id, user_id, status, total_amount, shipping_address_id, created_at, updated_at FROM orders WHERE id=%s", (order_id,))
         order = cur.fetchone()
         if not order:
             return jsonify({'error': 'Not found'}), 404
         cur.execute("SELECT product_id, quantity, price FROM order_items WHERE order_id=%s", (order_id,))
         items = cur.fetchall()
         order['items'] = items
-        # decode shipping_address JSON if present
-        sa = order.get('shipping_address')
-        if isinstance(sa, str) and sa:
-            try:
-                order['shipping_address'] = json.loads(sa)
-            except Exception:
-                pass
     finally:
         conn.close()
     return jsonify(order), 200
 
 
+@app.route('/api/v1/orders/<order_id>/details', methods=['GET'])
+@require_auth
+def get_order_details(order_id):
+    """
+    Microservice-friendly projection: return minimal stored fields and fetch details
+    from dependent services (user-service, product-service) at read time.
+    """
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT id, user_id, status, total_amount, created_at, updated_at FROM orders WHERE id=%s", (order_id,))
+        order = cur.fetchone()
+        if not order:
+            return jsonify({'error': 'Not found'}), 404
+        cur.execute("SELECT product_id, quantity FROM order_items WHERE order_id=%s", (order_id,))
+        items = cur.fetchall() or []
+    finally:
+        conn.close()
+
+    # Fetch user details from user-service
+    user_obj = None
+    try:
+        uresp = requests.get(f"{USER_SERVICE_URL}/users/{order['user_id']}", headers=_fwd_auth_headers(), timeout=5)
+        if uresp.status_code == 200:
+            user_obj = uresp.json()
+    except Exception:
+        # keep user_obj as None on failure
+        pass
+
+    # Fetch product details for each item from product-service
+    enriched_items = []
+    for it in items:
+        pid = it['product_id']
+        product_obj = None
+        try:
+            presp = requests.get(f"{PRODUCT_SERVICE_URL}/products/{pid}", headers=_fwd_auth_headers(), timeout=5)
+            if presp.status_code == 200:
+                product_obj = presp.json()
+        except Exception:
+            pass
+        enriched_items.append({
+            'productId': pid,
+            'quantity': it['quantity'],
+            'product': product_obj
+        })
+
+    # Fetch shipping address details if we have an id; otherwise optionally try default
+    shipping_addr = None
+    try:
+        # We don't have a direct GET-by-id address endpoint; list and filter
+        ar = requests.get(f"{USER_SERVICE_URL}/users/{order['user_id']}/addresses", headers=_fwd_auth_headers(), timeout=5)
+        if ar.status_code == 200:
+            arr = ar.json() or []
+            if order.get('shipping_address_id'):
+                shipping_addr = next((a for a in arr if a.get('id') == order['shipping_address_id']), None)
+            else:
+                shipping_addr = arr[0] if len(arr) > 0 else None
+    except Exception:
+        pass
+
+    response = {
+        'id': order['id'],
+        'status': order['status'],
+        'total_amount': float(order['total_amount']) if order.get('total_amount') is not None else None,
+        'created_at': order.get('created_at').isoformat() if order.get('created_at') else None,
+        'updated_at': order.get('updated_at').isoformat() if order.get('updated_at') else None,
+        'userId': order['user_id'],
+        'shippingAddressId': order.get('shipping_address_id'),
+        'shippingAddress': shipping_addr,
+        'user': user_obj,
+        'items': enriched_items
+    }
+
+    return jsonify(response), 200
+
+
 @app.route('/api/v1/orders/<order_id>/cancel', methods=['POST'])
+@require_auth
 def cancel_order(order_id):
     conn = get_db_connection()
     if not conn:
@@ -296,6 +429,7 @@ def cancel_order(order_id):
 
 
 @app.route('/api/v1/orders/<order_id>/pay', methods=['POST'])
+@require_auth
 def pay_order(order_id):
     conn = get_db_connection()
     if not conn:

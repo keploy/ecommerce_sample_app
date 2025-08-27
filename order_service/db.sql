@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS orders (
     user_id VARCHAR(36) NOT NULL,
     status ENUM('PENDING','PAID','CANCELLED') NOT NULL DEFAULT 'PENDING',
     idempotency_key VARCHAR(64) NULL,
-    shipping_address JSON NULL,
+    shipping_address_id VARCHAR(36) NULL,
     total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -27,4 +27,5 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_shipaddr ON orders(shipping_address_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
