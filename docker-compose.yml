@@ -85,11 +85,15 @@ services:
       ADMIN_EMAIL: admin@example.com
       ADMIN_PASSWORD: admin123
       RESET_ADMIN_PASSWORD: "true"
+      COVERAGE: "1"
     depends_on:
       mysql-users:
         condition: service_healthy
     ports:
       - "8082:8082"
+    volumes:
+      - ./coverage:/coverage
+      - ./user_service/coverage:/svc_coverage
 
   product_service:
     build: ./product_service
@@ -102,11 +106,15 @@ services:
       DB_PASSWORD: password
       DB_NAME: product_db
       FLASK_RUN_PORT: "8081"
+      COVERAGE: "1"
     depends_on:
       mysql-products:
         condition: service_healthy
     ports:
       - "8081:8081"
+    volumes:
+      - ./coverage:/coverage
+      - ./product_service/coverage:/svc_coverage
 
   order_service:
     build: ./order_service
@@ -126,6 +134,7 @@ services:
       AWS_ENDPOINT: http://localstack:4566
       SQS_QUEUE_URL: http://localstack:4566/000000000000/order-events
       FLASK_RUN_PORT: "8080"
+      COVERAGE: "1"
     depends_on:
       mysql-orders:
         condition: service_healthy
@@ -137,6 +146,9 @@ services:
         condition: service_started
     ports:
       - "8080:8080"
+    volumes:
+      - ./coverage:/coverage
+      - ./order_service/coverage:/svc_coverage
 
   apigateway:
     build: ./apigateway
@@ -148,6 +160,7 @@ services:
       PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
       ORDER_SERVICE_URL: http://order_service:8080/api/v1
       FLASK_RUN_PORT: "8083"
+      COVERAGE: "1"
     depends_on:
       user_service:
         condition: service_started
@@ -157,3 +170,6 @@ services:
         condition: service_started
     ports:
       - "8083:8083"
+    volumes:
+      - ./coverage:/coverage
+      - ./apigateway/coverage:/svc_coverage

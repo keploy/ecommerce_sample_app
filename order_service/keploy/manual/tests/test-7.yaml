@@ -15,7 +15,7 @@ spec:
     header:
       Accept: '*/*'
       Accept-Encoding: gzip, deflate, br
-      Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MzdhYzlhZS04MzI0LTExZjAtODY2Ny1mYWJlN2QyYmU2ZDQiLCJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNzU2Mjg1MjI3LCJleHAiOjE3NTYyOTI0Mjd9.x4ynpV3UDk8IFZ93xRY2y5ABHY5N5lYgv8KzJBJNAiI
+      Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZWY1ODg3Ni04NDE2LTExZjAtYjBhOC1mNmMyOTNhM2UxZWQiLCJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNzU2Mzk0MTQxLCJleHAiOjE3NTg5ODYxNDF9.AsSxN-qJ5fx7cff6D4fYqwH0Wd896-4EFHNAkSRQU4Q
       Connection: keep-alive
       Host: localhost:8080
       Postman-Token: e34d1861-4bbb-4f1f-886d-2a6e26fd190a

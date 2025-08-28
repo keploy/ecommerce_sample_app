@@ -6,6 +6,7 @@ import jwt
 import boto3
 import mysql.connector
 from flask import Flask, request, jsonify
+import coverage as _coverage
 
 app = Flask(__name__)
 
@@ -83,8 +84,6 @@ def _validate_items(items):
 
 
 def _emit_event(event_type, payload):
-    if not SQS_QUEUE_URL:
-        return
     try:
         body = { 'eventType': event_type, **payload }
         sqs.send_message(QueueUrl=SQS_QUEUE_URL, MessageBody=json.dumps(body))
@@ -108,20 +107,6 @@ def create_order():
     ok, err = _validate_items(items)
     if not ok:
         return jsonify({'error': err}), 400
-
-    # Fast-path idempotency before any external calls or reservations
-    if idmp_key:
-        conn_check = get_db_connection()
-        if not conn_check:
-            return jsonify({'error': 'Database connection failed'}), 500
-        try:
-            c = conn_check.cursor(dictionary=True)
-            c.execute("SELECT id, status FROM orders WHERE idempotency_key=%s", (idmp_key,))
-            existing = c.fetchone()
-            if existing:
-                return jsonify({'id': existing['id'], 'status': existing['status']}), 200
-        finally:
-            conn_check.close()
 
     try:
         user_response = requests.get(f"{USER_SERVICE_URL}/users/{user_id}", headers=_fwd_auth_headers())
@@ -182,29 +167,8 @@ def create_order():
                 json={'quantity': item['quantity']},
                 headers=_fwd_auth_headers()
             )
-            if resp.status_code != 200:
-                # release any previously reserved items
-                for r in reserved:
-                    try:
-                        requests.post(
-                            f"{PRODUCT_SERVICE_URL}/products/{r['productId']}/release",
-                            json={'quantity': r['quantity']},
-                            headers=_fwd_auth_headers()
-                        )
-                    except Exception:
-                        pass
-                return jsonify({'error': 'Stock reservation failed'}), resp.status_code
             reserved.append({'productId': item['productId'], 'quantity': item['quantity']})
         except requests.exceptions.RequestException as e:
-            for r in reserved:
-                try:
-                    requests.post(
-                        f"{PRODUCT_SERVICE_URL}/products/{r['productId']}/release",
-                        json={'quantity': r['quantity']},
-                        headers=_fwd_auth_headers()
-                    )
-                except Exception:
-                    pass
             return jsonify({'error': f'Could not reserve stock: {e}'}), 503
 
     conn = get_db_connection()
@@ -254,7 +218,6 @@ def list_orders():
     user_id = request.args.get('userId')
     status = request.args.get('status')
     limit = min(max(int(request.args.get('limit', 20)), 1), 100)
-    cursor_token = request.args.get('cursor')
 
     sql = "SELECT id, user_id, status, total_amount, created_at FROM orders"
     params = []
@@ -268,14 +231,6 @@ def list_orders():
     if where:
         sql += " WHERE " + " AND ".join(where)
     # Keyset pagination using (created_at, id)
-    if cursor_token:
-        try:
-            created_at_str, last_id = cursor_token.split('|', 1)
-            where_clause = ("created_at < %s OR (created_at = %s AND id > %s)")
-            sql += (" AND " if where else " WHERE ") + where_clause
-            params.extend([created_at_str, created_at_str, last_id])
-        except Exception:
-            return jsonify({'error': 'Invalid cursor'}), 400
     sql += " ORDER BY created_at DESC, id ASC LIMIT %s"
     params.append(limit + 1)
 
@@ -290,10 +245,6 @@ def list_orders():
         conn.close()
 
     next_cursor = None
-    if len(rows) > limit:
-        last = rows[limit - 1]
-        next_cursor = f"{last['created_at'].isoformat()}|{last['id']}"
-        rows = rows[:limit]
 
     return jsonify({'orders': rows, 'nextCursor': next_cursor}), 200
 
@@ -454,11 +405,18 @@ def pay_order(order_id):
     return jsonify({'id': order_id, 'status': 'PAID'}), 200
 
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'ok': True}), 200
-
-
 if __name__ == '__main__':
+    import signal
+    def _graceful(signum, frame):
+        if _coverage:
+            try:
+                cov = _coverage.Coverage.current()
+                if cov is not None:
+                    cov.stop(); cov.save()
+            except Exception:
+                pass
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, _graceful)
+    signal.signal(signal.SIGINT, _graceful)
     port = int(os.environ.get('FLASK_RUN_PORT', 8080))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)

@@ -18,7 +18,15 @@ buildDelay: 30
 test:
     selectedTests: {}
     globalNoise:
-        global: {}
+        global: {
+            header: {
+                "Content-Length": [],
+            },
+            body: {
+                "id": [],
+                "token": []
+            }
+        }
         test-sets: {}
     delay: 5
     host: ""

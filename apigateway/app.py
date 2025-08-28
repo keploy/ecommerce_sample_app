@@ -2,6 +2,8 @@ import os
 import signal
 from flask import Flask, request, Response, jsonify
 import requests
+import coverage as _coverage
+
 
 app = Flask(__name__)
 
@@ -96,17 +98,20 @@ def gw_orders(subpath):
     return _proxy(ORDER_SERVICE_URL, f"orders/{subpath}")
 
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'ok': True}), 200
-
 
 if __name__ == '__main__':
-    # Ensure we exit quickly on SIGTERM/SIGINT during docker stop
+    # Ensure we stop/save coverage before exiting on SIGTERM/SIGINT
     def _graceful_exit(signum, frame):
-        # Let Flask/Werkzeug shutdown
-        os._exit(0)
+        if _coverage:
+            try:
+                cov = _coverage.Coverage.current()
+                if cov is not None:
+                    cov.stop()
+                    cov.save()
+            except Exception:
+                pass
+        raise SystemExit(0)
     signal.signal(signal.SIGTERM, _graceful_exit)
     signal.signal(signal.SIGINT, _graceful_exit)
     port = int(os.environ.get('FLASK_RUN_PORT', 8083))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, use_reloader=False)

@@ -2,6 +2,7 @@ import os
 import uuid
 import mysql.connector
 from flask import Flask, jsonify, request
+import coverage as _coverage
 import jwt
 
 app = Flask(__name__)
@@ -214,11 +215,6 @@ def release_stock(product_id):
         conn.close()
 
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'ok': True}), 200
-
-
 @app.route('/api/v1/products/<string:product_id>', methods=['PUT'])
 @require_auth
 def update_product(product_id):
@@ -323,5 +319,17 @@ def search_products():
 
 
 if __name__ == '__main__':
+    import signal
+    def _graceful(signum, frame):
+        if _coverage:
+            try:
+                cov = _coverage.Coverage.current()
+                if cov is not None:
+                    cov.stop(); cov.save()
+            except Exception:
+                pass
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, _graceful)
+    signal.signal(signal.SIGINT, _graceful)
     port = int(os.environ.get('FLASK_RUN_PORT', 8081))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)

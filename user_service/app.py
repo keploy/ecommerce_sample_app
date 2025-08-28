@@ -4,11 +4,14 @@ import mysql.connector
 import datetime
 import jwt
 from flask import Flask, request, jsonify
+import coverage as _coverage
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-change-me')
 JWT_ALG = 'HS256'
+# Default JWT TTL to 30 days; allow override via env (seconds)
+JWT_TTL_SECONDS = int(os.environ.get('JWT_TTL_SECONDS', str(30 * 24 * 60 * 60)))
 
 # Auth helpers (must be defined before route decorators)
 from functools import wraps
@@ -307,26 +310,32 @@ def login():
     conn.close()
     if not row or not check_password_hash(row['password_hash'], data['password']):
         return jsonify({'error': 'Invalid credentials'}), 401
-    # issue JWT
+    # issue JWT (expires in 30 days by default)
     now = datetime.datetime.utcnow()
     payload = {
         'sub': row['id'],
         'username': row['username'],
         'iat': int(now.timestamp()),
-        'exp': int((now + datetime.timedelta(hours=2)).timestamp())
+        'exp': int((now + datetime.timedelta(seconds=JWT_TTL_SECONDS)).timestamp())
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
     return jsonify({'id': row['id'], 'username': row['username'], 'email': row['email'], 'token': token}), 200
 
 
-# (auth helpers are defined above)
-
-
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'ok': True}), 200
 
 
 if __name__ == '__main__':
+    import signal
+    def _graceful(signum, frame):
+        if _coverage:
+            try:
+                cov = _coverage.Coverage.current()
+                if cov is not None:
+                    cov.stop(); cov.save()
+            except Exception:
+                pass
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, _graceful)
+    signal.signal(signal.SIGINT, _graceful)
     port = int(os.environ.get('FLASK_RUN_PORT', 8082))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)

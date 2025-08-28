@@ -228,5 +228,5 @@ paths:
                   id: { type: string }
                   username: { type: string }
                   email: { type: string, format: email }
-                  token: { type: string, description: Bearer JWT token }
+                  token: { type: string, description: Bearer JWT token (expires in 30 days by default) }
         '401': { description: Invalid credentials }

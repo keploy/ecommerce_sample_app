@@ -1,0 +1,18 @@
+[run]
+branch = True
+parallel = True
+source = .
+data_file = /coverage/.coverage.user_service
+omit =
+	*/migrate.py
+	*/migrations/*
+
+[report]
+show_missing = True
+skip_empty = True
+
+[paths]
+source =
+	.
+	/app
+	/Users/charankamarapu/microservices/user_service

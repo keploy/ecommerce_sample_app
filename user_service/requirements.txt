@@ -3,3 +3,4 @@ mysql-connector-python==9.0.0
 gunicorn==22.0.0
 Werkzeug==3.0.3
 PyJWT==2.8.0
+coverage==7.5.4
