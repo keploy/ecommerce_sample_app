@@ -75,6 +75,23 @@ paths:
                         phone: { type: string, nullable: true }
                         is_default: { type: boolean }
         '404': { description: Not found }
+    delete:
+      summary: Delete user
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: boolean }
+        '404': { description: Not found }
   /api/v1/users/{userId}/addresses:
     post:
       summary: Create address

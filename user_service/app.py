@@ -153,6 +153,47 @@ def get_user(user_id):
         return jsonify({'error': 'User not found'}), 404
 
 
+@app.route('/api/v1/users/<string:user_id>', methods=['DELETE'])
+@require_auth
+def delete_user(user_id):
+    """Delete a user and their addresses.
+    Returns 200 if deleted, 404 if user not found.
+    """
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cur = conn.cursor()
+        # Ensure user exists first
+        cur.execute("SELECT id FROM users WHERE id=%s", (user_id,))
+        if not cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({'error': 'User not found'}), 404
+
+        # Delete addresses first to satisfy FK constraints
+        cur.execute("DELETE FROM addresses WHERE user_id=%s", (user_id,))
+        # Delete user
+        cur.execute("DELETE FROM users WHERE id=%s", (user_id,))
+        conn.commit()
+        cur.close(); conn.close()
+        return jsonify({'deleted': True}), 200
+    except mysql.connector.Error as err:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'error': f'Failed to delete user: {err}'}), 500
+
+
 # Addresses CRUD
 @app.route('/api/v1/users/<string:user_id>/addresses', methods=['POST'])
 @require_auth

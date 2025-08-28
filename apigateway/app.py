@@ -60,34 +60,40 @@ def gw_login():
 
 @app.route('/api/v1/users', methods=['GET', 'POST'])
 def gw_users_root():
-    return _proxy(USER_SERVICE_URL)
+    # Forward to /api/v1/users on the user-service
+    return _proxy(USER_SERVICE_URL, 'users')
 
 
 @app.route('/api/v1/users/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 def gw_users(subpath):
-    return _proxy(USER_SERVICE_URL, subpath)
+    # Always include the users/ prefix when forwarding
+    return _proxy(USER_SERVICE_URL, f"users/{subpath}")
 
 
 # Products
 @app.route('/api/v1/products', methods=['GET', 'POST'])
 def gw_products_root():
-    return _proxy(PRODUCT_SERVICE_URL)
+    # Forward to /api/v1/products on the product-service
+    return _proxy(PRODUCT_SERVICE_URL, 'products')
 
 
 @app.route('/api/v1/products/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 def gw_products(subpath):
-    return _proxy(PRODUCT_SERVICE_URL, subpath)
+    # Always include the products/ prefix when forwarding
+    return _proxy(PRODUCT_SERVICE_URL, f"products/{subpath}")
 
 
 # Orders
 @app.route('/api/v1/orders', methods=['GET', 'POST'])
 def gw_orders_root():
-    return _proxy(ORDER_SERVICE_URL)
+    # Forward to /api/v1/orders on the order-service
+    return _proxy(ORDER_SERVICE_URL, 'orders')
 
 
 @app.route('/api/v1/orders/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 def gw_orders(subpath):
-    return _proxy(ORDER_SERVICE_URL, subpath)
+    # Always include the orders/ prefix when forwarding
+    return _proxy(ORDER_SERVICE_URL, f"orders/{subpath}")
 
 
 @app.route('/health', methods=['GET'])

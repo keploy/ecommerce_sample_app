@@ -27,6 +27,14 @@
       }
     },
     {
+      "name": "Delete user (via gateway)",
+      "request": {
+        "method": "DELETE",
+        "header": [ {"key":"Authorization","value":"Bearer {{jwt}}"} ],
+        "url": {"raw":"{{gw_base}}/api/v1/users/{{user_id}}","host":["{{gw_base}}"],"path":["api","v1","users","{{user_id}}"]}
+      }
+    },
+    {
       "name": "Create order (shippingAddressId)",
       "request": {
         "method": "POST",

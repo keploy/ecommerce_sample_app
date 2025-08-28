@@ -2104,3 +2104,278 @@ spec:
     created: 1756287207
     reqtimestampmock: 2025-08-27T09:33:27.36060188Z
     restimestampmock: 2025-08-27T09:33:27.361132255Z
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: mock-0
+spec:
+    metadata:
+        connID: "0"
+        requestOperation: HandshakeV10
+        responseOperation: OK
+        type: config
+    requests:
+        - header:
+            header:
+                payload_length: 32
+                sequence_id: 1
+            packet_type: SSLRequest
+          message:
+            capability_flags: 431991437
+            max_packet_size: 1073741824
+            character_set: 255
+            filler: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        - header:
+            header:
+                payload_length: 300
+                sequence_id: 2
+            packet_type: HandshakeResponse41
+          message:
+            capability_flags: 431991437
+            max_packet_size: 1073741824
+            character_set: 255
+            filler: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            username: user
+            auth_response: [231, 214, 204, 2, 34, 206, 155, 177, 0, 230, 180, 109, 25, 17, 105, 19, 139, 74, 82, 217, 74, 1, 145, 35, 39, 223, 27, 114, 254, 111, 149, 56]
+            database: product_db
+            auth_plugin_name: caching_sha2_password
+            connection_attributes:
+                _client_name: libmysql
+                _client_version: 9.0.0
+                _connector_license: GPL-2.0
+                _connector_name: mysql-connector-python
+                _connector_version: 9.0.0
+                _os: Linux
+                _pid: "1"
+                _platform: aarch64
+                _source_host: 48aa9bf3baf9
+            zstdcompressionlevel: 0
+    responses:
+        - header:
+            header:
+                payload_length: 74
+                sequence_id: 0
+            packet_type: HandshakeV10
+          message:
+            protocol_version: 10
+            server_version: 8.0.43
+            connection_id: 10
+            auth_plugin_data: [66, 29, 68, 102, 105, 48, 91, 7, 46, 101, 40, 92, 72, 119, 24, 33, 12, 23, 105, 43, 0]
+            filler: 0
+            capability_flags: 3758096383
+            character_set: 255
+            status_flags: 2
+            auth_plugin_name: caching_sha2_password
+        - header:
+            header:
+                payload_length: 2
+                sequence_id: 3
+            packet_type: AuthMoreData
+          message:
+            status_tag: 1
+            data: FastAuthSuccess
+        - header:
+            header:
+                payload_length: 22
+                sequence_id: 4
+            packet_type: OK
+          message:
+            header: 0
+            affected_rows: 0
+            last_insert_id: 0
+            status_flags: 16386
+            warnings: 0
+            info: "\0\r\x01\v\nproduct_db"
+    created: 1756364568
+    reqtimestampmock: 2025-08-28T07:02:48.533205959Z
+    restimestampmock: 2025-08-28T07:02:48.540829668Z
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: mock-1
+spec:
+    metadata:
+        connID: "0"
+        requestOperation: COM_QUERY
+        responseOperation: OK
+        type: mocks
+    requests:
+        - header:
+            header:
+                payload_length: 51
+                sequence_id: 0
+            packet_type: COM_QUERY
+          message:
+            command: 3
+            parameter_count: 0
+            null_bitmap: []
+            new_params_bind_flag: 0
+            parameters: []
+            query: SET NAMES 'utf8mb4' COLLATE 'utf8mb4_0900_ai_ci'
+    responses:
+        - header:
+            header:
+                payload_length: 107
+                sequence_id: 1
+            packet_type: OK
+          message:
+            header: 0
+            affected_rows: 0
+            last_insert_id: 0
+            status_flags: 16386
+            warnings: 0
+            info: "\0b\0\x1D\x14character_set_client\autf8mb4\0!\x18character_set_connection\autf8mb4\0\x1E\x15character_set_results\autf8mb4"
+    created: 1756364568
+    reqtimestampmock: 2025-08-28T07:02:48.541579501Z
+    restimestampmock: 2025-08-28T07:02:48.541844543Z
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: mock-2
+spec:
+    metadata:
+        connID: "0"
+        requestOperation: COM_QUERY
+        responseOperation: OK
+        type: mocks
+    requests:
+        - header:
+            header:
+                payload_length: 19
+                sequence_id: 0
+            packet_type: COM_QUERY
+          message:
+            command: 3
+            parameter_count: 0
+            null_bitmap: []
+            new_params_bind_flag: 0
+            parameters: []
+            query: set autocommit=0
+    responses:
+        - header:
+            header:
+                payload_length: 26
+                sequence_id: 1
+            packet_type: OK
+          message:
+            header: 0
+            affected_rows: 0
+            last_insert_id: 0
+            status_flags: 16384
+            warnings: 0
+            info: "\0\x11\0\x0F\nautocommit\x03OFF"
+    created: 1756364568
+    reqtimestampmock: 2025-08-28T07:02:48.542038209Z
+    restimestampmock: 2025-08-28T07:02:48.542458793Z
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: mock-3
+spec:
+    metadata:
+        connID: "0"
+        requestOperation: COM_PING
+        responseOperation: OK
+        type: mocks
+    requests:
+        - header:
+            header:
+                payload_length: 1
+                sequence_id: 0
+            packet_type: COM_PING
+          message:
+            command: 14
+    responses:
+        - header:
+            header:
+                payload_length: 7
+                sequence_id: 1
+            packet_type: OK
+          message:
+            header: 0
+            affected_rows: 0
+            last_insert_id: 0
+            status_flags: 0
+            warnings: 0
+            info: ""
+    created: 1756364568
+    reqtimestampmock: 2025-08-28T07:02:48.542557126Z
+    restimestampmock: 2025-08-28T07:02:48.542670834Z
+---
+version: api.keploy.io/v1beta1
+kind: MySQL
+name: mock-4
+spec:
+    metadata:
+        connID: "0"
+        requestOperation: COM_QUERY
+        responseOperation: TextResultSet
+        type: mocks
+    requests:
+        - header:
+            header:
+                payload_length: 39
+                sequence_id: 0
+            packet_type: COM_QUERY
+          message:
+            command: 3
+            parameter_count: 0
+            null_bitmap: []
+            new_params_bind_flag: 0
+            parameters: []
+            query: SELECT COUNT(*) AS cnt FROM products
+    responses:
+        - header:
+            header:
+                payload_length: 1
+                sequence_id: 1
+            packet_type: TextResultSet
+          message:
+            columnCount: 1
+            columns:
+                - header:
+                    payload_length: 25
+                    sequence_id: 2
+                  catalog: def
+                  schema: ""
+                  table: ""
+                  org_table: ""
+                  name: cnt
+                  org_name: ""
+                  fixed_length: 12
+                  character_set: 63
+                  column_length: 21
+                  type: 8
+                  flags: 129
+                  decimals: 0
+                  filler:
+                    - 0
+                    - 0
+                  defaultValue: ""
+            eofAfterColumns: []
+            rows:
+                - header:
+                    payload_length: 2
+                    sequence_id: 3
+                  values:
+                    - type: 8
+                      name: cnt
+                      value: "3"
+                      unsigned: false
+            FinalResponse:
+                data:
+                    - 7
+                    - 0
+                    - 0
+                    - 4
+                    - 254
+                    - 0
+                    - 0
+                    - 1
+                    - 0
+                    - 0
+                    - 0
+                type: EOF
+    created: 1756364568
+    reqtimestampmock: 2025-08-28T07:02:48.542868543Z
+    restimestampmock: 2025-08-28T07:02:48.543155168Z
