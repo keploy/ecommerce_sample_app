@@ -54,8 +54,8 @@ jobs:
             --container-name="user_service" \
             --path="./user_service" \
             --config-path="./user_service" \
-            --delay 15 \
-            -t test-set-0
+            --delay 20 \
+            -t atg
 
       - name: Upload Keploy artifacts (user_service)
         if: always()
