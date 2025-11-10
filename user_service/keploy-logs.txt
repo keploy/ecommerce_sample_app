@@ -1,0 +1,15 @@
+🐰 Keploy: 2025-11-10T13:02:03Z 	[33mWARN[0m	AppName in config (microservices) does not match current directory name (user_service). using current directory name as appName
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Parsing TestSuite File	{"path": "keploy/testsuite/suite-0.yaml"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Starting load test	{"vus": 50, "duration": "5m", "rps": 0}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Parsing TestSuite File	{"path": "keploy/testsuite/suite-0.yaml"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Skipping security checks for failed step	{"stepName": "Login_User", "failureReason": "expected status code 200 but got 401"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Skipping security checks for failed step	{"stepName": "Create_Address", "failureReason": "expected status code 201 but got 404"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Skipping security checks for failed step	{"stepName": "Create_Order", "failureReason": "expected status code 201 but got 404"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Skipping security checks for failed step	{"stepName": "Get_Order_Details", "failureReason": "expected status code 200 but got 404"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Skipping security checks for failed step	{"stepName": "Delete_User", "failureReason": "expected status code 204 but got 404"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[33mWARN[0m	Unknown ruleset, falling back to basic	{"ruleset": "strict"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Starting dashboard server	{"URL": "http://localhost:3000"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Opening browser on dashboard	{"URL": "http://localhost:3000/?dashboard=20251110_130203"}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Metrics server starting on port	{"port": 9090}
+🐰 Keploy: 2025-11-10T13:02:03Z 	[34mINFO[0m	Starting token server on port 2345
+🐰 Keploy: 2025-11-10T13:02:03Z 	[31mERROR[0m	Dashboard server failed	{"error": "listen tcp :3000: bind: address already in use"}

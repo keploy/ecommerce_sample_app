@@ -1,0 +1,56 @@
+{
+  "test_suite_file": "suite-0.yaml",
+  "vus": 30,
+  "duration": "3m",
+  "rps": 0,
+  "steps": [
+    {
+      "step_name": "Create_todo",
+      "total_requests": 2993,
+      "total_failures": 2993,
+      "total_bytes_in": 146657,
+      "total_bytes_out": 619551,
+      "p95_latency": 109742563,
+      "thresholds": [
+        {
+          "metric": "http_req_duration_p95",
+          "condition": "< 500ms",
+          "severity": "high",
+          "actual": "109.742563ms",
+          "pass": true
+        },
+        {
+          "metric": "http_req_failed_rate",
+          "condition": "<= 1%",
+          "severity": "critical",
+          "actual": 100,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "step_name": "Get_todo",
+      "total_requests": 2993,
+      "total_failures": 2993,
+      "total_bytes_in": 0,
+      "total_bytes_out": 619551,
+      "p95_latency": 94658354,
+      "thresholds": [
+        {
+          "metric": "http_req_duration_p95",
+          "condition": "< 500ms",
+          "severity": "high",
+          "actual": "94.658354ms",
+          "pass": true
+        },
+        {
+          "metric": "http_req_failed_rate",
+          "condition": "<= 1%",
+          "severity": "critical",
+          "actual": 100,
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

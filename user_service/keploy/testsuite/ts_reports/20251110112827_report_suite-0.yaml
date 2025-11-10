@@ -1,0 +1,55 @@
+suitename: Todo_CRUD_Operations
+totalsteps: 2
+failedsteps: 2
+stepsresult:
+    - stepname: Create_todo
+      method: POST
+      url: /todos
+      status: failed
+      statuscode: 404
+      header:
+        Content-Length:
+            - "207"
+        Content-Type:
+            - text/html; charset=utf-8
+        Date:
+            - Mon, 10 Nov 2025 11:28:27 GMT
+        Server:
+            - Werkzeug/3.0.3 Python/3.11.14
+      body: |
+        <!doctype html>
+        <html lang=en>
+        <title>404 Not Found</title>
+        <h1>Not Found</h1>
+        <p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+      responsetime: 11.777958ms
+      failurereason: expected status code 201 but got 404
+      extractedvars: {}
+      reqbytes: 49
+      resbytes: 207
+    - stepname: Get_todo
+      method: GET
+      url: /todos/{{todo_id}}
+      status: failed
+      statuscode: 404
+      header:
+        Content-Length:
+            - "207"
+        Content-Type:
+            - text/html; charset=utf-8
+        Date:
+            - Mon, 10 Nov 2025 11:28:27 GMT
+        Server:
+            - Werkzeug/3.0.3 Python/3.11.14
+      body: |
+        <!doctype html>
+        <html lang=en>
+        <title>404 Not Found</title>
+        <h1>Not Found</h1>
+        <p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+      responsetime: 1.930001ms
+      failurereason: expected status code 200 but got 404
+      extractedvars: {}
+      reqbytes: 0
+      resbytes: 207
+executiontime: 13.812667ms

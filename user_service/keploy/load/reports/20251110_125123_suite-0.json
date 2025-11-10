@@ -1,0 +1,128 @@
+{
+  "test_suite_file": "suite-0.yaml",
+  "vus": 50,
+  "duration": "5m",
+  "rps": 0,
+  "steps": [
+    {
+      "step_name": "Login_User",
+      "total_requests": 3759,
+      "total_failures": 3759,
+      "total_bytes_in": 221781,
+      "total_bytes_out": 120288,
+      "p95_latency": 34372348,
+      "thresholds": [
+        {
+          "metric": "http_req_duration_p95",
+          "condition": "< 400ms",
+          "severity": "high",
+          "actual": "34.372348ms",
+          "pass": true
+        },
+        {
+          "metric": "http_req_failed_rate",
+          "condition": "<= 0.5%",
+          "severity": "critical",
+          "actual": 100,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "step_name": "Create_Address",
+      "total_requests": 3759,
+      "total_failures": 3759,
+      "total_bytes_in": 578886,
+      "total_bytes_out": 93975,
+      "p95_latency": 13458436,
+      "thresholds": [
+        {
+          "metric": "http_req_duration_p95",
+          "condition": "< 400ms",
+          "severity": "high",
+          "actual": "13.458436ms",
+          "pass": true
+        },
+        {
+          "metric": "http_req_failed_rate",
+          "condition": "<= 0.5%",
+          "severity": "critical",
+          "actual": 100,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "step_name": "Create_Order",
+      "total_requests": 3759,
+      "total_failures": 3759,
+      "total_bytes_in": 593922,
+      "total_bytes_out": 778113,
+      "p95_latency": 13602788,
+      "thresholds": [
+        {
+          "metric": "http_req_duration_p95",
+          "condition": "< 400ms",
+          "severity": "high",
+          "actual": "13.602788ms",
+          "pass": true
+        },
+        {
+          "metric": "http_req_failed_rate",
+          "condition": "<= 0.5%",
+          "severity": "critical",
+          "actual": 100,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "step_name": "Get_Order_Details",
+      "total_requests": 3759,
+      "total_failures": 3759,
+      "total_bytes_in": 0,
+      "total_bytes_out": 778113,
+      "p95_latency": 14229255,
+      "thresholds": [
+        {
+          "metric": "http_req_duration_p95",
+          "condition": "< 400ms",
+          "severity": "high",
+          "actual": "14.229255ms",
+          "pass": true
+        },
+        {
+          "metric": "http_req_failed_rate",
+          "condition": "<= 0.5%",
+          "severity": "critical",
+          "actual": 100,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "step_name": "Delete_User",
+      "total_requests": 3759,
+      "total_failures": 3759,
+      "total_bytes_in": 0,
+      "total_bytes_out": 93975,
+      "p95_latency": 13584141,
+      "thresholds": [
+        {
+          "metric": "http_req_duration_p95",
+          "condition": "< 400ms",
+          "severity": "high",
+          "actual": "13.584141ms",
+          "pass": true
+        },
+        {
+          "metric": "http_req_failed_rate",
+          "condition": "<= 0.5%",
+          "severity": "critical",
+          "actual": 100,
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

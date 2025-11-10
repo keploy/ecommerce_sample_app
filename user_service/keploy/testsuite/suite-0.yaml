@@ -1,0 +1,122 @@
+# suite-1.yaml
+version: api.keploy.io/v2beta1
+kind: TestSuite
+name: API_Gateway_Ecommerce
+spec:
+  metadata:
+    description: >
+      Test login, user address management, and order operations
+      for the E-commerce API Gateway.
+
+  # Security Configuration
+  security:
+    ruleset: strict
+    severity_threshold: HIGH
+    allowlist:
+      headers: ["Server"]
+      keys: ["data.debug"]
+
+  # Load Testing Configuration
+  load:
+    profile: ramping_vus
+    vus: 50
+    duration: 5m
+    stages:
+      - duration: 1m
+        target: 10
+      - duration: 2m
+        target: 30
+      - duration: 2m
+        target: 50
+    thresholds:
+      - metric: http_req_duration_p95
+        condition: "< 400ms"
+        severity: high
+      - metric: http_req_failed_rate
+        condition: "<= 0.5%"
+        severity: critical
+
+  # Test Steps
+  steps:
+    - name: Login_User
+      method: POST
+      url: /api/v1/login
+      headers:
+        Content-Type: application/json
+      body: |
+        {
+          "username": "{{username}}",
+          "password": "p@ssw0rd"
+        }
+      extract:
+        jwt: token
+      assert:
+        - type: status_code
+          expected_string: "200"
+        - type: json_path
+          expression: "$.token"
+          expected_not_empty: true
+
+    - name: Create_Address
+      method: POST
+      url: /api/v1/users/{{user_id}}/addresses
+      headers:
+        Content-Type: application/json
+        Authorization: Bearer {{jwt}}
+      body: |
+        {
+          "line1": "1 Main St",
+          "city": "NYC",
+          "state": "NY",
+          "postal_code": "10001",
+          "country": "US",
+          "phone": "+1-555-0000",
+          "is_default": true
+        }
+      extract:
+        address_id: id
+      assert:
+        - type: status_code
+          expected_string: "201"
+
+    - name: Create_Order
+      method: POST
+      url: /api/v1/orders
+      headers:
+        Content-Type: application/json
+        Idempotency-Key: "{{idempotency_key}}"
+        Authorization: Bearer {{jwt}}
+      body: |
+        {
+          "userId": "{{user_id}}",
+          "items": [
+            {
+              "productId": "{{product_id}}",
+              "quantity": 1
+            }
+          ],
+          "shippingAddressId": "{{address_id}}"
+        }
+      extract:
+        order_id: id
+      assert:
+        - type: status_code
+          expected_string: "201"
+
+    - name: Get_Order_Details
+      method: GET
+      url: /api/v1/orders/{{order_id}}/details
+      headers:
+        Authorization: Bearer {{jwt}}
+      assert:
+        - type: status_code
+          expected_string: "200"
+
+    - name: Delete_User
+      method: DELETE
+      url: /api/v1/users/{{user_id}}
+      headers:
+        Authorization: Bearer {{jwt}}
+      assert:
+        - type: status_code
+          expected_string: "204"
