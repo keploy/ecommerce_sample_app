@@ -1,0 +1,48 @@
+name: golangci-lint
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  pull-requests: read
+
+# cancel the in-progress workflow when PR is refreshed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ">=1.23"
+          cache: false
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          only-new-issues: true
+          args: --timeout=5m
+
+      - name: Check gofmt (diff with line numbers)
+        run: |
+          output=$(gofmt -l -d .)
+          if [ -n "$output" ]; then
+            echo "🚨 gofmt found issues:"
+            echo "$output"
+            exit 1
+          fi
+
+      - name: Check for Deprecated Dependencies
+        run: |
+          source ./.github/workflows/test_workflow_scripts/check-deprecated-deps.sh

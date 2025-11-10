@@ -1,0 +1,232 @@
+package yaml
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+
+	"go.keploy.io/server/v2/pkg/models"
+	"go.keploy.io/server/v2/utils"
+	"go.uber.org/zap"
+	yamlLib "gopkg.in/yaml.v3"
+)
+
+type IndexMode string
+
+const (
+	ModeDir  IndexMode = "dir"
+	ModeFile IndexMode = "file"
+)
+
+// Ignored folders
+const (
+	FolderReports     = "reports"
+	FolderTestReports = "testReports"
+	FolderSchema      = "schema"
+)
+
+// NetworkTrafficDoc stores the request-response data of a network call (ingress or egress)
+type NetworkTrafficDoc struct {
+	Version      models.Version `json:"version" yaml:"version"`
+	Kind         models.Kind    `json:"kind" yaml:"kind"`
+	Name         string         `json:"name" yaml:"name"`
+	Spec         yamlLib.Node   `json:"spec" yaml:"spec"`
+	Curl         string         `json:"curl" yaml:"curl,omitempty"`
+	ConnectionID string         `json:"connectionId" yaml:"connectionId,omitempty"`
+}
+
+// ctxReader wraps an io.Reader with a context for cancellation support
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (cr *ctxReader) Read(p []byte) (n int, err error) {
+	select {
+	case <-cr.ctx.Done():
+		return 0, cr.ctx.Err()
+	default:
+		return cr.r.Read(p)
+	}
+}
+
+// ctxWriter wraps an io.Writer with a context for cancellation support
+type ctxWriter struct {
+	ctx    context.Context
+	writer io.Writer
+}
+
+func (cw *ctxWriter) Write(p []byte) (n int, err error) {
+	for len(p) > 0 {
+		var written int
+		written, err = cw.writer.Write(p)
+		n += written
+		if err != nil {
+			return n, err
+		}
+		p = p[written:]
+	}
+	return n, nil
+}
+
+func WriteFile(ctx context.Context, logger *zap.Logger, path, fileName string, docData []byte, isAppend bool) error {
+	isFileEmpty, err := CreateYamlFile(ctx, logger, path, fileName)
+	if err != nil {
+		utils.LogError(logger, err, "failed to create a yaml file", zap.String("path directory", path), zap.String("yaml", fileName))
+		return err
+	}
+	flag := os.O_WRONLY | os.O_TRUNC
+	if isAppend {
+		data := []byte("---\n")
+		if isFileEmpty {
+			data = []byte{}
+		}
+		docData = append(data, docData...)
+		flag = os.O_WRONLY | os.O_APPEND
+	}
+	yamlPath := filepath.Join(path, fileName+".yaml")
+	file, err := os.OpenFile(yamlPath, flag, fs.ModePerm)
+	if err != nil {
+		utils.LogError(logger, err, "failed to open file for writing", zap.String("file", yamlPath))
+		return err
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			utils.LogError(logger, err, "failed to close file", zap.String("file", yamlPath))
+		}
+	}()
+
+	cw := &ctxWriter{
+		ctx:    ctx,
+		writer: file,
+	}
+
+	_, err = cw.Write(docData)
+	if err != nil {
+		if err == ctx.Err() {
+			return nil // Ignore context cancellation error
+		}
+		utils.LogError(logger, err, "failed to write the yaml document", zap.String("yaml file name", fileName))
+		return err
+	}
+	return nil
+}
+
+func ReadFile(ctx context.Context, logger *zap.Logger, path, name string) ([]byte, error) {
+	filePath := filepath.Join(path, name+".yaml")
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the file: %v", err)
+	}
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			utils.LogError(logger, err, "failed to close file", zap.String("file", filePath))
+		}
+	}()
+
+	cr := &ctxReader{
+		ctx: ctx,
+		r:   file,
+	}
+
+	data, err := io.ReadAll(cr)
+	if err != nil {
+		if err == ctx.Err() {
+			return nil, err // Ignore context cancellation error
+		}
+		return nil, fmt.Errorf("failed to read the file: %v", err)
+	}
+	return data, nil
+}
+
+func CreateYamlFile(ctx context.Context, Logger *zap.Logger, path string, fileName string) (bool, error) {
+	yamlPath, err := ValidatePath(filepath.Join(path, fileName+".yaml"))
+	if err != nil {
+		utils.LogError(Logger, err, "failed to validate the yaml file path", zap.String("path directory", path), zap.String("yaml", fileName))
+		return false, err
+	}
+
+	if _, err := os.Stat(yamlPath); err != nil {
+		if ctx.Err() == nil || ctx.Err() == context.Canceled {
+			err = os.MkdirAll(filepath.Join(path), 0777)
+			if err != nil {
+				utils.LogError(Logger, err, "failed to create a directory for the yaml file", zap.String("path directory", path), zap.String("yaml", fileName))
+				return false, err
+			}
+			file, err := os.OpenFile(yamlPath, os.O_CREATE, 0777) // Set file permissions to 777
+			if err != nil {
+				utils.LogError(Logger, err, "failed to create a yaml file", zap.String("path directory", path), zap.String("yaml", fileName))
+				return false, err
+			}
+			err = file.Close()
+			if err != nil {
+				utils.LogError(Logger, err, "failed to close the yaml file", zap.String("path directory", path), zap.String("yaml", fileName))
+				return false, err
+			}
+			return true, nil
+		}
+		return false, err
+	}
+	return false, nil
+}
+
+func ReadSessionIndices(ctx context.Context, path string, logger *zap.Logger, mode IndexMode) ([]string, error) {
+	var indices []string
+
+	dir, err := ReadDir(path, fs.FileMode(os.O_RDONLY))
+	if err != nil {
+		logger.Debug("creating a folder for the keploy generated testcases", zap.Error(err))
+		return indices, nil
+	}
+
+	files, err := dir.ReadDir(0)
+	if err != nil {
+		return indices, err
+	}
+
+	for _, v := range files {
+		// Skip ignored folders
+		if v.Name() == FolderReports || v.Name() == FolderTestReports || v.Name() == FolderSchema {
+			continue
+		}
+
+		name := v.Name()
+
+		switch mode {
+		case ModeDir:
+			if v.IsDir() {
+				indices = append(indices, name)
+			}
+		case ModeFile:
+			if ext := filepath.Ext(name); ext != "" {
+				name = name[:len(name)-len(ext)]
+			}
+			indices = append(indices, name)
+		}
+	}
+
+	return indices, nil
+}
+
+func DeleteFile(_ context.Context, logger *zap.Logger, path, name string) error {
+	filePath := filepath.Join(path, name+".yaml")
+	err := os.Remove(filePath)
+	if err != nil {
+		utils.LogError(logger, err, "failed to delete the file", zap.String("file", filePath))
+		return fmt.Errorf("failed to delete the file: %v", err)
+	}
+	return nil
+}
+
+func DeleteDir(_ context.Context, logger *zap.Logger, path string) error {
+	err := os.RemoveAll(path)
+	if err != nil {
+		utils.LogError(logger, err, "failed to delete the directory", zap.String("path", path))
+		return fmt.Errorf("failed to delete the directory: %v", err)
+	}
+	return nil
+}

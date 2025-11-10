@@ -1,0 +1,24 @@
+# This is the configuration for golangci-lint for the restic project.
+#
+# A sample config with all settings is here:
+# https://github.com/golangci/golangci-lint/blob/master/.golangci.example.yml
+version: "2"
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+  exclusions:
+    rules: []
+    paths-except:
+      - pkg/core/hooks/bpf_arm64_bpfel.go
+      - pkg/core/hooks/bpf_x86_bpfel.go
+      - pkg/service/utgen
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

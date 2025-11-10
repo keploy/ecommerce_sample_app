@@ -1,0 +1,48 @@
+name: Documentation Update📄
+description: Suggest an improvement/addition in the Keploy Server Docs.
+title: "[docs]: "
+labels: [Documentation]
+
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for taking the time to our documentation better 🙏
+  - type: checkboxes
+    attributes:
+      label: "👀 Is there an existing issue for this?"
+      description: Please search to see if an issue already exists for the bug you encountered
+      options:
+        - label: I have searched and didn't find similar issue
+          required: true
+  - type: textarea
+    attributes:
+      label: "💭 Description"
+      description: "A clear and concise description of what the issue is."
+      placeholder: "Documentation is ..."
+  - type: dropdown
+    id: repository
+    attributes:
+      label: 💻 Repository
+      options:
+        - keploy
+        - go-sdk
+        - java-sdk
+        - python-sdk
+        - typescript-sdk
+        - docs
+        - website
+        - writers-program
+        - blog-website
+        - ui
+        - samples-go
+        - samples-java
+        - samples-rust
+        - samples-python
+        - samples-csharp
+        - samples-typescript
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        I have read the [Code of Conduct](https://github.com/keploy/keploy/blob/main/CODE_OF_CONDUCT.md)

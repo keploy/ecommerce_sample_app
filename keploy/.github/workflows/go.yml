@@ -1,0 +1,31 @@
+name: Go on Linux
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ">=1.23"
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Build arm
+        run: GOOS=linux GOARCH=arm64 go build -v ./...
+
+      - uses: codfish/semantic-release-action@v3
+        with:
+          dry-run: true
+          additional-packages: '["@semantic-release/exec@7.0.3"]'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
