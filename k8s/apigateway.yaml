@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: apigateway
+spec:
+  type: NodePort
+  ports:
+  - port: 8083
+    targetPort: 8083
+    nodePort: 30083
+  selector:
+    app: apigateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apigateway
+spec:
+  selector:
+    matchLabels:
+      app: apigateway
+  template:
+    metadata:
+      labels:
+        app: apigateway
+    spec:
+      containers:
+      - name: apigateway
+        image: apigateway:latest
+        imagePullPolicy: Never
+        env:
+        - name: USER_SERVICE_URL
+          value: "http://user-service:8082/api/v1"
+        - name: PRODUCT_SERVICE_URL
+          value: "http://product-service:8081/api/v1"
+        - name: ORDER_SERVICE_URL
+          value: "http://order-service:8080/api/v1"
+        - name: FLASK_RUN_PORT
+          value: "8083"
+        ports:
+        - containerPort: 8083
