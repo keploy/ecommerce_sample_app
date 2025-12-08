@@ -219,6 +219,6 @@
   {"key":"email","value":"alice@example.com"},
   {"key":"user_base","value":"http://localhost:8082/api/v1"},
   {"key":"product_base","value":"http://localhost:8081/api/v1"},
-  {"key":"order_base","value":"http://localhost:8080/api/v1"}
+  {"key":"order_base","value":"http://localhost:8085/api/v1"}
   ]
 }

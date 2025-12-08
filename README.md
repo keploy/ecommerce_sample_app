@@ -32,7 +32,7 @@ This repo contains three Python (Flask) microservices orchestrated with Docker C
 flowchart LR
   client([Client / Postman])
 
-  subgraph "Order Service :8080"
+  subgraph "Order Service :8085"
     order_svc([Order Service])
     o1["POST /api/v1/orders"]
     o2["GET /api/v1/orders"]
@@ -103,3 +103,15 @@ Key behaviors
 - Order creation validates user and products, reserves stock, persists order + items, emits SQS event.
 - Idempotency: POST /orders supports Idempotency-Key to avoid duplicate orders.
 - Status transitions: PENDING → PAID or CANCELLED (cancel releases stock).
+
+
+sudo docker tag ecommerce_sample_app-apigateway:latest   apigateway:latest
+sudo docker tag ecommerce_sample_app-order_service:latest order-service:latest
+sudo docker tag ecommerce_sample_app-product_service:latest product-service:latest
+sudo docker tag ecommerce_sample_app-user_service:latest  user-service:latest
+
+
+sudo kind load docker-image apigateway:latest --name ecommerce
+sudo kind load docker-image order-service:latest --name ecommerce
+sudo kind load docker-image product-service:latest --name ecommerce
+sudo kind load docker-image user-service:latest --name ecommerce

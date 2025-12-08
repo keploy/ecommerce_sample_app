@@ -10612,7 +10612,7 @@ spec:
                     - 0
                 type: EOF
     created: 1756364601
-    reqtimestampmock: 2025-08-28T07:03:21.808050711Z
+    reqtimestampmock: 2025-08-28T07:03:21.808550711Z
     restimestampmock: 2025-08-28T07:03:21.808321586Z
 ---
 version: api.keploy.io/v1beta1
@@ -13927,7 +13927,7 @@ spec:
             null_bitmap: []
             new_params_bind_flag: 0
             parameters: []
-            query: INSERT INTO products (id, name, description, price, stock) VALUES ('528e8080-22bf-4215-aa50-fbbe58a8f5a0', 'MaxPrice Item', NULL, 30.0, 10)
+            query: INSERT INTO products (id, name, description, price, stock) VALUES ('528e8085-22bf-4215-aa50-fbbe58a8f5a0', 'MaxPrice Item', NULL, 30.0, 10)
     responses:
         - header:
             header:
@@ -14614,7 +14614,7 @@ spec:
                   values:
                     - type: 253
                       name: id
-                      value: 528e8080-22bf-4215-aa50-fbbe58a8f5a0
+                      value: 528e8085-22bf-4215-aa50-fbbe58a8f5a0
                       unsigned: false
                     - type: 253
                       name: name
@@ -14868,7 +14868,7 @@ spec:
             null_bitmap: []
             new_params_bind_flag: 0
             parameters: []
-            query: DELETE FROM products WHERE id='528e8080-22bf-4215-aa50-fbbe58a8f5a0'
+            query: DELETE FROM products WHERE id='528e8085-22bf-4215-aa50-fbbe58a8f5a0'
     responses:
         - header:
             header:

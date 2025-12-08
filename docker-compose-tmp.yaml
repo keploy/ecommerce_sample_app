@@ -1,0 +1,210 @@
+version: "3.9"
+services:
+    mysql-users:
+        image: mysql:8.0
+        container_name: mysql-users
+        restart: "no"
+        stop_grace_period: 30s
+        environment:
+            MYSQL_ROOT_PASSWORD: root
+            MYSQL_DATABASE: user_db
+            MYSQL_USER: user
+            MYSQL_PASSWORD: password
+        ports:
+            - "3307:3306"
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+    mysql-products:
+        image: mysql:8.0
+        container_name: mysql-products
+        restart: "no"
+        stop_grace_period: 30s
+        environment:
+            MYSQL_ROOT_PASSWORD: root
+            MYSQL_DATABASE: product_db
+            MYSQL_USER: user
+            MYSQL_PASSWORD: password
+        ports:
+            - "3308:3306"
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+    mysql-orders:
+        image: mysql:8.0
+        container_name: mysql-orders
+        restart: "no"
+        stop_grace_period: 30s
+        environment:
+            MYSQL_ROOT_PASSWORD: root
+            MYSQL_DATABASE: order_db
+            MYSQL_USER: user
+            MYSQL_PASSWORD: password
+        ports:
+            - "3309:3306"
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+    localstack:
+        image: localstack/localstack:3.3
+        container_name: localstack
+        restart: "no"
+        stop_grace_period: 20s
+        environment:
+            SERVICES: sqs
+            DEBUG: "1"
+            AWS_DEFAULT_REGION: us-east-1
+        ports:
+            - "4566:4566"
+        volumes:
+            - ./localstack:/etc/localstack/init/ready.d
+            - /var/run/docker.sock:/var/run/docker.sock
+    user_service:
+        build: ./user_service
+        container_name: user_service
+        restart: "no"
+        stop_grace_period: 20s
+        environment:
+            DB_HOST: mysql-users
+            DB_USER: user
+            DB_PASSWORD: password
+            DB_NAME: user_db
+            FLASK_RUN_PORT: "8082"
+            ADMIN_USERNAME: admin
+            ADMIN_EMAIL: admin@example.com
+            ADMIN_PASSWORD: admin123
+            RESET_ADMIN_PASSWORD: "true"
+            COVERAGE: "1"
+        depends_on:
+            mysql-users:
+                condition: service_healthy
+        ports:
+            - "8082:8082"
+        volumes:
+            - ./coverage:/coverage
+            - ./user_service/coverage:/svc_coverage
+    product_service:
+        build: ./product_service
+        container_name: product_service
+        restart: "no"
+        stop_grace_period: 20s
+        environment:
+            DB_HOST: mysql-products
+            DB_USER: user
+            DB_PASSWORD: password
+            DB_NAME: product_db
+            FLASK_RUN_PORT: "8081"
+            COVERAGE: "1"
+        depends_on:
+            mysql-products:
+                condition: service_healthy
+        ports:
+            - "8081:8081"
+        volumes:
+            - ./coverage:/coverage
+            - ./product_service/coverage:/svc_coverage
+    order_service:
+        build: ./order_service
+        container_name: order_service
+        restart: "no"
+        stop_grace_period: 20s
+        environment:
+            DB_HOST: mysql-orders
+            DB_USER: user
+            DB_PASSWORD: password
+            DB_NAME: order_db
+            USER_SERVICE_URL: http://user_service:8082/api/v1
+            PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
+            AWS_REGION: us-east-1
+            AWS_ACCESS_KEY_ID: test
+            AWS_SECRET_ACCESS_KEY: test
+            AWS_ENDPOINT: http://localstack:4566
+            SQS_QUEUE_URL: http://localstack:4566/000000000000/order-events
+            FLASK_RUN_PORT: "8085"
+            COVERAGE: "1"
+        depends_on:
+            keploy-agent:
+                condition: service_healthy
+            mysql-orders:
+                condition: service_healthy
+            user_service:
+                condition: service_started
+            product_service:
+                condition: service_started
+            localstack:
+                condition: service_started
+        volumes:
+            - ./coverage:/coverage
+            - ./order_service/coverage:/svc_coverage
+        pid: service:keploy-agent
+        network_mode: service:keploy-agent
+    apigateway:
+        build: ./apigateway
+        container_name: apigateway
+        restart: "no"
+        stop_grace_period: 20s
+        environment:
+            USER_SERVICE_URL: http://user_service:8082/api/v1
+            PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
+            ORDER_SERVICE_URL: http://order_service:8085/api/v1
+            FLASK_RUN_PORT: "8083"
+            COVERAGE: "1"
+        depends_on:
+            user_service:
+                condition: service_started
+            product_service:
+                condition: service_started
+            order_service:
+                condition: service_started
+        ports:
+            - "8083:8083"
+        volumes:
+            - ./coverage:/coverage
+            - ./apigateway/coverage:/svc_coverage
+    keploy-agent:
+        image: ghcr.io/keploy/keploy:v3.0.1-beta2
+        container_name: keploy-v3-15b3
+        privileged: true
+        working_dir: /home/ayush/ecommerce_sample_app
+        environment:
+            - BINARY_TO_DOCKER=true
+        ports:
+            - "35827:35827"
+            - "33527:33527"
+            - "8085:8085"
+        networks:
+            - default
+        volumes:
+            - /home/ayush/ecommerce_sample_app:/home/ayush/ecommerce_sample_app
+            - /sys/fs/cgroup:/sys/fs/cgroup
+            - /sys/kernel/debug:/sys/kernel/debug
+            - /sys/fs/bpf:/sys/fs/bpf
+            - /var/run/docker.sock:/var/run/docker.sock
+            - /home/ayush/.keploy-config:/root/.keploy-config
+            - /home/ayush/.keploy:/root/.keploy
+        command:
+            - --port
+            - "35827"
+            - --proxy-port
+            - "33527"
+            - --dns-port
+            - "26789"
+            - --client-pid
+            - "429862"
+            - --mode
+            - record
+            - --is-docker
+        healthcheck:
+            test:
+                - CMD-SHELL
+                - cat /tmp/agent.ready
+            interval: 5s
+            timeout: 5s
+            retries: 6
+            start_period: 10s

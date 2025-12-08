@@ -1,0 +1,17 @@
+🐰 Keploy: 2025-12-04T18:16:48.787107031Z 	[34mINFO[0m	Using available ports	{"agent-port": 35827, "proxy-port": 33527, "dns-port": 26789}
+🐰 Keploy: 2025-12-04T18:16:48.787153412Z 	[34mINFO[0m	Application command provided :	{"cmd": "docker compose up --build"}
+🐰 Keploy: 2025-12-04T18:16:48.787196182Z 	[34mINFO[0m	Application command to execute :	{"cmd": "docker compose up --build"}
+🐰 Keploy: 2025-12-04T18:16:48.787254513Z 	[34mINFO[0m	Found docker compose file paths: [docker-compose.yml]
+🐰 Keploy: 2025-12-04T18:16:48.787653088Z 	[34mINFO[0m	Created new docker-compose for keploy internal use	{"path": "docker-compose-tmp.yaml"}
+🐰 Keploy: 2025-12-04T18:16:48.787672339Z 	[34mINFO[0m	Modified docker compose command to run keploy compose file	{"cmd": "docker compose -f ./docker-compose-tmp.yaml up --build"}
+🐰 Keploy: 2025-12-04T18:16:48.787679599Z 	[34mINFO[0m	Client setup completed successfully
+🐰 Keploy: 2025-12-04T18:16:48.78774993Z 	[34mINFO[0m	Starting Application :	{"executing_cli": "/usr/bin/sh -c docker compose -f ./docker-compose-tmp.yaml up --build"}
+🐰 Keploy: 2025-12-04T18:17:05.196361367Z 	[34mINFO[0m	Starting the agent in 	{"mode": "record"}
+🐰 Keploy: 2025-12-04T18:17:05.342082933Z 	[34mINFO[0m	Registering the client Info with keploy
+🐰 Keploy: 2025-12-04T18:17:06.027326595Z 	[34mINFO[0m	starting UDP DNS server at addr :26789
+🐰 Keploy: 2025-12-04T18:17:06.027342764Z 	[34mINFO[0m	starting TCP DNS server at addr :26789
+🐰 Keploy: 2025-12-04T18:17:06.027594998Z 	[34mINFO[0m	Keploy has taken control of the DNS resolution mechanism, your application may misbehave if you have provided wrong domain name in your application code.
+🐰 Keploy: 2025-12-04T18:17:06.027621309Z 	[34mINFO[0m	Proxy started at port:33527
+🐰 Keploy: 2025-12-04T18:17:06.027648319Z 	[34mINFO[0m	Starting Agent's HTTP server on :	{"port": 35827}
+🐰 Keploy: 2025-12-04T18:17:06.78938887Z 	[34mINFO[0m	Agent marked as ready	{"file": "/tmp/agent.ready"}
+🐰 Keploy: 2025-12-04T18:17:11.85447742Z 	[34mINFO[0m	SSL Request packet detected	{"Type": "mysql", "Client ConnectionID": "0", "Destination ConnectionID": "1", "Client IP Address": "172.20.0.6:35830"}

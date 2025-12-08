@@ -8,7 +8,7 @@ spec:
     method: POST
     proto_major: 1
     proto_minor: 1
-    url: http://localhost:8080/api/v1/orders
+    url: http://localhost:8085/api/v1/orders
     header:
       Accept: '*/*'
       Accept-Encoding: gzip, deflate, br
@@ -16,7 +16,7 @@ spec:
       Connection: keep-alive
       Content-Length: "108"
       Content-Type: application/json
-      Host: localhost:8080
+      Host: localhost:8085
       Idempotency-Key: 174b4892-6f2a-4c82-9c2d-7115eb015828
       Postman-Token: b7eaa250-a49a-4f6c-8f8f-6fa0474425de
       User-Agent: PostmanRuntime/7.45.0

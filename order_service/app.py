@@ -418,5 +418,5 @@ if __name__ == '__main__':
         raise SystemExit(0)
     signal.signal(signal.SIGTERM, _graceful)
     signal.signal(signal.SIGINT, _graceful)
-    port = int(os.environ.get('FLASK_RUN_PORT', 8080))
+    port = int(os.environ.get('FLASK_RUN_PORT', 8085))
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)

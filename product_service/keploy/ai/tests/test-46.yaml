@@ -8,7 +8,7 @@ spec:
     method: DELETE
     proto_major: 1
     proto_minor: 1
-    url: http://product_service:8081/api/v1/products/528e8080-22bf-4215-aa50-fbbe58a8f5a0
+    url: http://product_service:8081/api/v1/products/528e8085-22bf-4215-aa50-fbbe58a8f5a0
     header:
       Accept: '*/*'
       Accept-Encoding: gzip, deflate

@@ -8,13 +8,13 @@ spec:
     method: GET
     proto_major: 1
     proto_minor: 1
-    url: http://order_service:8080/api/v1/orders/247aba02-9b90-4323-a0dc-27dc682197ca
+    url: http://order_service:8085/api/v1/orders/247aba02-9b90-4323-a0dc-27dc682197ca
     header:
       Accept: '*/*'
       Accept-Encoding: gzip, deflate
       Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZWY1ODg3Ni04NDE2LTExZjAtYjBhOC1mNmMyOTNhM2UxZWQiLCJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNzU2Mzk0MTQxLCJleHAiOjE3NTg5ODYxNDF9.AsSxN-qJ5fx7cff6D4fYqwH0Wd896-4EFHNAkSRQU4Q
       Connection: keep-alive
-      Host: order_service:8080
+      Host: order_service:8085
       User-Agent: python-requests/2.32.3
     body: ""
     timestamp: 2025-08-28T07:00:14.447302068Z

@@ -38,7 +38,7 @@ spec:
         },
         {
           "description": null,
-          "id": "528e8080-22bf-4215-aa50-fbbe58a8f5a0",
+          "id": "528e8085-22bf-4215-aa50-fbbe58a8f5a0",
           "name": "MaxPrice Item",
           "price": "30.00",
           "stock": 10

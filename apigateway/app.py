@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 USER_SERVICE_URL = os.environ.get('USER_SERVICE_URL', 'http://user_service:8082/api/v1')
 PRODUCT_SERVICE_URL = os.environ.get('PRODUCT_SERVICE_URL', 'http://product_service:8081/api/v1')
-ORDER_SERVICE_URL = os.environ.get('ORDER_SERVICE_URL', 'http://order_service:8080/api/v1')
+ORDER_SERVICE_URL = os.environ.get('ORDER_SERVICE_URL', 'http://order_service:8085/api/v1')
 
 
 def _forward_headers():

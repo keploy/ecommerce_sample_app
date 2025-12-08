@@ -8,7 +8,7 @@ spec:
     method: GET
     proto_major: 1
     proto_minor: 1
-    url: http://localhost:8080/api/v1/orders?userId=437ac9ae-8324-11f0-8667-fabe7d2be6d4&limit=5
+    url: http://localhost:8085/api/v1/orders?userId=437ac9ae-8324-11f0-8667-fabe7d2be6d4&limit=5
     url_params:
       limit: "5"
       userId: 437ac9ae-8324-11f0-8667-fabe7d2be6d4
@@ -17,7 +17,7 @@ spec:
       Accept-Encoding: gzip, deflate, br
       Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZWY1ODg3Ni04NDE2LTExZjAtYjBhOC1mNmMyOTNhM2UxZWQiLCJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNzU2Mzk0MTQxLCJleHAiOjE3NTg5ODYxNDF9.AsSxN-qJ5fx7cff6D4fYqwH0Wd896-4EFHNAkSRQU4Q
       Connection: keep-alive
-      Host: localhost:8080
+      Host: localhost:8085
       Postman-Token: e34d1861-4bbb-4f1f-886d-2a6e26fd190a
       User-Agent: PostmanRuntime/7.45.0
     body: ""

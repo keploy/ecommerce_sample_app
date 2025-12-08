@@ -8,7 +8,7 @@ spec:
     method: POST
     proto_major: 1
     proto_minor: 1
-    url: http://order_service:8080/api/v1/orders
+    url: http://order_service:8085/api/v1/orders
     header:
       Accept: '*/*'
       Accept-Encoding: gzip, deflate
@@ -16,7 +16,7 @@ spec:
       Connection: keep-alive
       Content-Length: "131"
       Content-Type: application/json
-      Host: order_service:8080
+      Host: order_service:8085
       User-Agent: python-requests/2.32.3
     body: '{"userId": "50243d34-48f0-408a-abee-d407ced2a359", "items": [{"productId": "70249450-9b8f-43ef-a177-1fec0efd5246", "quantity": 1}]}'
     timestamp: 2025-08-28T07:00:16.311914277Z

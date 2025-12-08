@@ -50,6 +50,6 @@ spec:
         - name: SQS_QUEUE_URL
           value: "http://localstack:4566/000000000000/order-events"
         - name: FLASK_RUN_PORT
-          value: "8080"
+          value: "8085"
         ports:
-        - containerPort: 8080
+        - containerPort: 8085
