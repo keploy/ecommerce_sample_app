@@ -36,8 +36,25 @@ spec:
           value: "password"
         ports:
         - containerPort: 3306
+        # Allow MySQL plenty of time to initialize before Kubernetes starts
+        # killing it with liveness probes.
         livenessProbe:
           exec:
-            command: ["mysqladmin", "ping", "-h", "localhost"]
-          initialDelaySeconds: 5
+            command: 
+            - /bin/sh
+            - -c
+            - "mysqladmin ping -h 127.0.0.1 -uroot -proot || exit 1"
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "mysqladmin ping -h 127.0.0.1 -uroot -proot || exit 1"
+          initialDelaySeconds: 60
           periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 5

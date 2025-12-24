@@ -120,14 +120,28 @@ def create_user():
     user_id = str(uuid.uuid4())
     try:
         password_hash = generate_password_hash(password)
+        print(f"Creating user {user_id} with username {username}")
         cursor.execute(
             "INSERT INTO users (id, username, email, password_hash, phone) VALUES (%s, %s, %s, %s, %s)",
             (user_id, username, email, password_hash, phone)
         )
         conn.commit()
+        print(f"User {user_id} committed successfully")
+        # Verify the user was actually inserted
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+        verify = cursor.fetchone()
+        if not verify:
+            print(f"WARNING: User {user_id} not found after commit!")
+        else:
+            print(f"Verified user {user_id} exists in database")
     except mysql.connector.Error as err:
+        print(f"Database error creating user: {err}")
         conn.rollback()
         return jsonify({'error': f'Failed to create user: {err}'}), 500
+    except Exception as e:
+        print(f"Unexpected error creating user: {e}")
+        conn.rollback()
+        return jsonify({'error': f'Failed to create user: {e}'}), 500
     finally:
         cursor.close()
         conn.close()
@@ -142,13 +156,22 @@ def get_user(user_id):
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
 
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT id, username, email, phone, created_at FROM users WHERE id = %s", (user_id,))
-    user = cursor.fetchone()
-    if user:
-        cursor.execute("SELECT id, line1, line2, city, state, postal_code, country, phone, is_default FROM addresses WHERE user_id=%s ORDER BY is_default DESC, created_at DESC", (user_id,))
-        user['addresses'] = cursor.fetchall()
-    cursor.close(); conn.close()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, username, email, phone, created_at FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if user:
+            cursor.execute("SELECT id, line1, line2, city, state, postal_code, country, phone, is_default FROM addresses WHERE user_id=%s ORDER BY is_default DESC, created_at DESC", (user_id,))
+            user['addresses'] = cursor.fetchall()
+        cursor.close()
+    except mysql.connector.Error as err:
+        print(f"Database error in get_user: {err}")
+        if 'cursor' in locals():
+            cursor.close()
+        conn.close()
+        return jsonify({'error': f'Database error: {err}'}), 500
+    finally:
+        conn.close()
 
     if user:
         return jsonify(user), 200

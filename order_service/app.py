@@ -1,11 +1,13 @@
+import json
 import os
 import uuid
-import json
-import requests
-import jwt
+
 import boto3
+import jwt
 import mysql.connector
-from flask import Flask, request, jsonify
+import requests
+from flask import Flask, jsonify, request
+
 import coverage as _coverage
 
 app = Flask(__name__)
@@ -26,6 +28,7 @@ sqs = boto3.client(
     endpoint_url=endpoint_url
 )
 from functools import wraps
+
 
 def _auth_ok():
     auth = request.headers.get('Authorization') or ''
@@ -109,11 +112,19 @@ def create_order():
         return jsonify({'error': err}), 400
 
     try:
-        user_response = requests.get(f"{USER_SERVICE_URL}/users/{user_id}", headers=_fwd_auth_headers())
+        user_response = requests.get(f"{USER_SERVICE_URL}/users/{user_id}", headers=_fwd_auth_headers(), timeout=5)
         if user_response.status_code != 200:
-            return jsonify({'error': 'Invalid user ID'}), 400
+            error_msg = user_response.text[:200] if user_response.text else f"Status {user_response.status_code}"
+            print(f"User service validation failed for user {user_id}: {user_response.status_code} - {error_msg}")
+            if user_response.status_code == 404:
+                return jsonify({'error': 'User not found'}), 400
+            elif user_response.status_code == 401:
+                return jsonify({'error': 'Authentication failed when validating user'}), 401
+            else:
+                return jsonify({'error': f'Invalid user ID: {error_msg}'}), 400
         user_json = user_response.json()
     except requests.exceptions.RequestException as e:
+        print(f"Error connecting to User Service: {e}")
         return jsonify({'error': f'Could not connect to User Service: {e}'}), 503
 
     # Resolve shipping_address_id: either validate provided ID or pick default
@@ -241,7 +252,12 @@ def list_orders():
         cur = conn.cursor(dictionary=True)
         cur.execute(sql, params)
         rows = cur.fetchall()
+    except mysql.connector.Error as err:
+        print(f"Database error in list_orders: {err}")
+        return jsonify({'error': f'Database error: {err}'}), 500
     finally:
+        if 'cur' in locals():
+            cur.close()
         conn.close()
 
     next_cursor = None

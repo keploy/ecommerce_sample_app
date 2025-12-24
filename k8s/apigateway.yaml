@@ -5,9 +5,9 @@ metadata:
 spec:
   type: NodePort
   ports:
-  - port: 8083
-    targetPort: 8083
-    nodePort: 30083
+  - port: 8084
+    targetPort: 8084
+    nodePort: 30084
   selector:
     app: apigateway
 ---
@@ -36,6 +36,6 @@ spec:
         - name: ORDER_SERVICE_URL
           value: "http://order-service:8080/api/v1"
         - name: FLASK_RUN_PORT
-          value: "8083"
+          value: "8084"
         ports:
-        - containerPort: 8083
+        - containerPort: 8084
