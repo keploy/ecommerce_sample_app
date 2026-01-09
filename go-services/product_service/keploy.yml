@@ -12,7 +12,7 @@ proxyPort: 16789
 debug: false
 disableTele: false
 disableANSI: false
-containerName: product_service_go
+containerName: product_service
 networkName: ""
 buildDelay: 40
 test:
