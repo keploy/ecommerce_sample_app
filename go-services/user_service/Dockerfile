@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o /user-service ./user_service
+RUN go build -o /user-service ./user_service
 
 # Runtime
 FROM alpine:3.19

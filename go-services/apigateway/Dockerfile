@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o /apigateway ./apigateway
+RUN GOOS=linux go build -o /apigateway ./apigateway
 
 # Runtime
 FROM alpine:3.19
