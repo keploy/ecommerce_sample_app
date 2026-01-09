@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/keploy/go-sdk/v3/keploy"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -29,12 +31,15 @@ import (
 )
 
 var (
-	cfg       *config.Config
-	database  *sqlx.DB
-	sqsClient *sqs.Client
+	cfg             *config.Config
+	database        *sqlx.DB
+	sqsClient       *sqs.Client
+	serverStartTime time.Time
 )
 
 func main() {
+	serverStartTime = time.Now()
+
 	cfg = config.Load()
 	cfg.DBName = "order_db"
 	cfg.Port = 8080
@@ -57,6 +62,10 @@ func main() {
 		api.GET("/orders/:id/details", handleGetOrderDetails)
 		api.POST("/orders/:id/cancel", handleCancelOrder)
 		api.POST("/orders/:id/pay", handlePayOrder)
+
+		// Dynamic data endpoints for testing
+		api.GET("/health", handleHealth)
+		api.GET("/stats", handleStats)
 	}
 
 	srv := &http.Server{
@@ -557,3 +566,69 @@ func handlePayOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"id": orderID, "status": "PAID"})
 }
 
+// handleHealth returns service health with dynamic timestamp data
+func handleHealth(c *gin.Context) {
+	uptime := time.Since(serverStartTime)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":     "healthy",
+		"service":    "order-service",
+		"timestamp":  time.Now().UTC().Format(time.RFC3339Nano),
+		"serverTime": time.Now().Unix(),
+		"uptime": gin.H{
+			"seconds": int64(uptime.Seconds()),
+			"human":   uptime.String(),
+		},
+		"requestId": uuid.New().String(),
+		"version":   "1.0.0",
+		"environment": gin.H{
+			"dbHost": cfg.DBHost,
+			"region": cfg.AWSRegion,
+		},
+	})
+}
+
+// handleStats returns order statistics with dynamic data
+func handleStats(c *gin.Context) {
+	// Get total order count
+	var totalOrders int
+	database.Get(&totalOrders, "SELECT COUNT(*) FROM orders")
+
+	// Get count by status
+	type StatusCount struct {
+		Status string `db:"status"`
+		Count  int    `db:"count"`
+	}
+	var statusCounts []StatusCount
+	database.Select(&statusCounts, "SELECT status, COUNT(*) as count FROM orders GROUP BY status")
+
+	// Get recent order timestamps
+	type RecentOrder struct {
+		ID        string    `db:"id"`
+		CreatedAt time.Time `db:"created_at"`
+		Status    string    `db:"status"`
+		Total     float64   `db:"total_amount"`
+	}
+	var recentOrders []RecentOrder
+	database.Select(&recentOrders, "SELECT id, created_at, status, total_amount FROM orders ORDER BY created_at DESC LIMIT 5")
+
+	// Calculate total revenue
+	var totalRevenue float64
+	database.Get(&totalRevenue, "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'paid'")
+
+	c.JSON(http.StatusOK, gin.H{
+		"timestamp":    time.Now().UTC().Format(time.RFC3339Nano),
+		"requestId":    uuid.New().String(),
+		"generatedAt":  time.Now().Unix(),
+		"totalOrders":  totalOrders,
+		"totalRevenue": totalRevenue,
+		"statusCounts": statusCounts,
+		"recentOrders": recentOrders,
+		"serverUptime": time.Since(serverStartTime).String(),
+		"randomData": gin.H{
+			"uuid":      uuid.New().String(),
+			"timestamp": time.Now().UnixNano(),
+			"randomNum": time.Now().Nanosecond(),
+		},
+	})
+}

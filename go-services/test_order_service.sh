@@ -75,27 +75,102 @@ echo $RESPONSE | jq '.'
 ORDER_ID=$(echo $RESPONSE | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
 echo "ORDER_ID: $ORDER_ID"
 
-echo -e "\n=== 2. GET ORDER DETAILS (Keploy records enrichment calls) ==="
+echo -e "\n=== 2. GET ORDER (Get single order by ID) ==="
+curl -s -X GET "${ORDER_BASE}/orders/${ORDER_ID}" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 2.1. GET ORDER (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/orders/${ORDER_ID}" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 2.2. GET ORDER (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/orders/${ORDER_ID}" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 3. GET ORDER DETAILS (Keploy records enrichment calls) ==="
 curl -s -X GET "${ORDER_BASE}/orders/${ORDER_ID}/details" \
   -H "Authorization: Bearer $JWT" | jq '.'
 
-echo -e "\n=== 3. PAY ORDER (Keploy records payment validation calls) ==="
-curl -s -X POST "${ORDER_BASE}/orders/${ORDER_ID}/pay" \
+echo -e "\n=== 3.1. GET ORDER DETAILS (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/orders/${ORDER_ID}/details" \
   -H "Authorization: Bearer $JWT" | jq '.'
 
 echo -e "\n=== 4. LIST ORDERS (Keploy records list operation) ==="
 curl -s -X GET "${ORDER_BASE}/orders?userId=${USER_ID}&limit=5" \
   -H "Authorization: Bearer $JWT" | jq '.'
 
+echo -e "\n=== 4.1. LIST ORDERS (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/orders?userId=${USER_ID}&limit=5" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
 echo -e "\n=== 5. CREATE ANOTHER ORDER (Mouse) ==="
-curl -s -X POST "${ORDER_BASE}/orders" \
+RESPONSE=$(curl -s -X POST "${ORDER_BASE}/orders" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $JWT" \
   -H "Idempotency-Key: $(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)" \
   -d "{
     \"userId\": \"${USER_ID}\",
     \"items\": [{\"productId\": \"${MOUSE_ID}\", \"quantity\": 2}]
-  }" | jq '.'
+  }")
+echo $RESPONSE | jq '.'
+ORDER_ID_2=$(echo $RESPONSE | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+echo "ORDER_ID_2: $ORDER_ID_2"
+
+echo -e "\n=== 6. GET ORDER (Get second order by ID) ==="
+curl -s -X GET "${ORDER_BASE}/orders/${ORDER_ID_2}" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 6.1. GET ORDER (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/orders/${ORDER_ID_2}" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 7. CANCEL ORDER (Cancel the second order) ==="
+curl -s -X POST "${ORDER_BASE}/orders/${ORDER_ID_2}/cancel" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 7.1. CANCEL ORDER (DUPLICATE - idempotent, returns 200 if already cancelled) ==="
+curl -s -X POST "${ORDER_BASE}/orders/${ORDER_ID_2}/cancel" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 7.2. CANCEL ORDER (DUPLICATE - idempotent, returns 200 if already cancelled) ==="
+curl -s -X POST "${ORDER_BASE}/orders/${ORDER_ID_2}/cancel" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 8. PAY ORDER (Keploy records payment validation calls) ==="
+curl -s -X POST "${ORDER_BASE}/orders/${ORDER_ID}/pay" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 8.1. PAY ORDER (DUPLICATE - idempotent, returns 200 if already paid) ==="
+curl -s -X POST "${ORDER_BASE}/orders/${ORDER_ID}/pay" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 8.2. PAY ORDER (DUPLICATE - idempotent, returns 200 if already paid) ==="
+curl -s -X POST "${ORDER_BASE}/orders/${ORDER_ID}/pay" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 9. GET HEALTH (Health check endpoint) ==="
+curl -s -X GET "${ORDER_BASE}/health" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 9.1. GET HEALTH (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/health" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 9.2. GET HEALTH (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/health" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 10. GET STATS (Stats endpoint) ==="
+curl -s -X GET "${ORDER_BASE}/stats" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 10.1. GET STATS (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/stats" \
+  -H "Authorization: Bearer $JWT" | jq '.'
+
+echo -e "\n=== 10.2. GET STATS (DUPLICATE - for dedup testing) ==="
+curl -s -X GET "${ORDER_BASE}/stats" \
+  -H "Authorization: Bearer $JWT" | jq '.'
 
 echo -e "\n============================================================"
 echo "Done! Check ./order_service/keploy/ for recorded test cases"
