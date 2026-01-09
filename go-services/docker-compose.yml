@@ -71,7 +71,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   user_service:
-    build: ./user_service
+    build:
+      context: .
+      dockerfile: ./user_service/Dockerfile
     container_name: user_service
     restart: "no"
     stop_grace_period: 20s
@@ -96,7 +98,9 @@ services:
       - ./user_service/coverage:/svc_coverage
 
   product_service:
-    build: ./product_service
+    build:
+      context: .
+      dockerfile: ./product_service/Dockerfile
     container_name: product_service
     restart: "no"
     stop_grace_period: 20s
@@ -117,7 +121,9 @@ services:
       - ./product_service/coverage:/svc_coverage
 
   order_service:
-    build: ./order_service
+    build:
+      context: .
+      dockerfile: ./order_service/Dockerfile
     container_name: order_service
     restart: "no"
     stop_grace_period: 20s
@@ -151,7 +157,9 @@ services:
       - ./order_service/coverage:/svc_coverage
 
   apigateway:
-    build: ./apigateway
+    build:
+      context: .
+      dockerfile: ./apigateway/Dockerfile
     container_name: apigateway
     restart: "no"
     stop_grace_period: 20s
