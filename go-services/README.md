@@ -1,61 +1,19 @@
-# Go Services - E-commerce Sample App
-
-This directory contains Go implementations of all the Python microservices.
-
-## Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| user-service | 8082 | User management, authentication, addresses |
-| product-service | 8081 | Product catalog, stock management |
-| order-service | 8080 | Order lifecycle, inter-service calls, SQS events |
-| apigateway | 8083 | HTTP reverse proxy to all services |
-
-## Quick Start
+in order to run keploy record mode for order service, run the following command:
 
 ```bash
-# Build and start all services
-docker compose up -d --build
-
-# Check health
-docker compose ps
-
-# View logs
-docker compose logs -f
-
-# Stop
-docker compose down
+ keploy record -c "docker compose up" --container-name="order_service" --build-delay 40 --path="./order_service" --config-path="./order_service"
 ```
 
-## Running E2E Tests
+wait for it to start the services
+
+then run the `test_api_script.py` file to run the tests.
 
 ```bash
-# Start services first
-docker compose up -d --build
-
-# Wait for healthy (about 30 seconds)
-sleep 30
-
-# Run E2E tests
-go test -v -tags=e2e ./tests/e2e/...
+python3 -m venv venv
+source venv/bin/activate
+pip install requests
+python3 test_api_script.py
 ```
 
-## Development
+this will record all the test cases and store it in `order_service/keploy` folder.
 
-```bash
-# Download dependencies
-go mod tidy
-
-# Run individual service locally
-DB_HOST=localhost DB_USER=user DB_PASSWORD=password go run ./cmd/userservice
-```
-
-## Architecture
-
-All services use:
-- **Gin** for HTTP routing
-- **sqlx** for MySQL access
-- **JWT** for authentication
-- **AWS SDK v2** for SQS (order-service only)
-
-Database schemas are reused from the original Python service `db.sql` files.
