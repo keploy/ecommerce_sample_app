@@ -9,7 +9,15 @@ RUN go mod download
 # Copy source
 COPY . .
 
-# Build
+# Download the time freeze agent for amd64
+# ADD https://keploy-enterprise.s3.us-west-2.amazonaws.com/releases/latest/assets/go_freeze_time_amd64 /lib/keploy/go_freeze_time_amd64
+# # Set suitable permissions
+# RUN chmod +x /lib/keploy/go_freeze_time_amd64
+# # Run the binary
+# RUN /lib/keploy/go_freeze_time_amd64
+# # Build with fake time (during test mode)
+# RUN go build -tags=faketime -o /order-service ./order_service
+
 RUN go build -o /order-service ./order_service
 
 # Runtime
