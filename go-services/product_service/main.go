@@ -349,3 +349,4 @@ func handleSearchProducts(c *gin.Context) {
 
 	c.JSON(http.StatusOK, products)
 }
+

@@ -28,3 +28,4 @@ CREATE TABLE IF NOT EXISTS order_items (
     CONSTRAINT chk_qty_pos CHECK (quantity > 0),
     CONSTRAINT chk_price_nonneg CHECK (price >= 0)
 );
+

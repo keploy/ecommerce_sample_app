@@ -17,3 +17,4 @@ CREATE TABLE IF NOT EXISTS products (
 INSERT INTO products (id, name, description, price, stock) VALUES
 (UUID(), 'Laptop', 'A powerful and portable laptop.', 1200.00, 50),
 (UUID(), 'Mouse', 'An ergonomic wireless mouse.', 25.50, 200);
+

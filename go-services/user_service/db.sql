@@ -29,3 +29,4 @@ CREATE TABLE IF NOT EXISTS addresses (
     FOREIGN KEY (user_id) REFERENCES users(id),
     INDEX idx_addr_user (user_id)
 );
+

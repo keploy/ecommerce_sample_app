@@ -556,3 +556,4 @@ func handlePayOrder(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"id": orderID, "status": "PAID"})
 }
+

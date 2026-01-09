@@ -3,7 +3,7 @@ version: "3.9"
 services:
   mysql-users:
     image: mysql:8.0
-    container_name: mysql-users-go
+    container_name: mysql-users
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -13,8 +13,6 @@ services:
       MYSQL_PASSWORD: password
     ports:
       - "3307:3306"
-    volumes:
-      - ./init-sql/user_db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -23,7 +21,7 @@ services:
 
   mysql-products:
     image: mysql:8.0
-    container_name: mysql-products-go
+    container_name: mysql-products
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -33,8 +31,6 @@ services:
       MYSQL_PASSWORD: password
     ports:
       - "3308:3306"
-    volumes:
-      - ./init-sql/product_db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -43,7 +39,7 @@ services:
 
   mysql-orders:
     image: mysql:8.0
-    container_name: mysql-orders-go
+    container_name: mysql-orders
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -53,8 +49,6 @@ services:
       MYSQL_PASSWORD: password
     ports:
       - "3309:3306"
-    volumes:
-      - ./init-sql/order_db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -63,7 +57,7 @@ services:
 
   localstack:
     image: localstack/localstack:3.3
-    container_name: localstack-go
+    container_name: localstack
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -73,14 +67,12 @@ services:
     ports:
       - "4566:4566"
     volumes:
-      - ../localstack:/etc/localstack/init/ready.d
+      - ./localstack:/etc/localstack/init/ready.d
       - /var/run/docker.sock:/var/run/docker.sock
 
-  user-service:
-    build:
-      context: .
-      dockerfile: user-service/Dockerfile
-    container_name: user-service-go
+  user_service:
+    build: ./user_service
+    container_name: user_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -88,28 +80,24 @@ services:
       DB_USER: user
       DB_PASSWORD: password
       DB_NAME: user_db
-      JWT_SECRET: dev-secret-change-me
+      FLASK_RUN_PORT: "8082"
       ADMIN_USERNAME: admin
       ADMIN_EMAIL: admin@example.com
       ADMIN_PASSWORD: admin123
       RESET_ADMIN_PASSWORD: "true"
+      COVERAGE: "1"
     depends_on:
       mysql-users:
         condition: service_healthy
     ports:
       - "8082:8082"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/api/v1/login"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
+    volumes:
+      - ./coverage:/coverage
+      - ./user_service/coverage:/svc_coverage
 
-  product-service:
-    build:
-      context: .
-      dockerfile: product-service/Dockerfile
-    container_name: product-service-go
+  product_service:
+    build: ./product_service
+    container_name: product_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -117,24 +105,20 @@ services:
       DB_USER: user
       DB_PASSWORD: password
       DB_NAME: product_db
-      JWT_SECRET: dev-secret-change-me
+      FLASK_RUN_PORT: "8081"
+      COVERAGE: "1"
     depends_on:
       mysql-products:
         condition: service_healthy
     ports:
       - "8081:8081"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/api/v1/products"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
+    volumes:
+      - ./coverage:/coverage
+      - ./product_service/coverage:/svc_coverage
 
-  order-service:
-    build:
-      context: .
-      dockerfile: order-service/Dockerfile
-    container_name: order-service-go
+  order_service:
+    build: ./order_service
+    container_name: order_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -142,43 +126,50 @@ services:
       DB_USER: user
       DB_PASSWORD: password
       DB_NAME: order_db
-      USER_SERVICE_URL: http://user-service:8082/api/v1
-      PRODUCT_SERVICE_URL: http://product-service:8081/api/v1
+      USER_SERVICE_URL: http://user_service:8082/api/v1
+      PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_ENDPOINT: http://localstack:4566
       SQS_QUEUE_URL: http://localstack:4566/000000000000/order-events
-      JWT_SECRET: dev-secret-change-me
+      FLASK_RUN_PORT: "8080"
+      COVERAGE: "1"
     depends_on:
       mysql-orders:
         condition: service_healthy
-      user-service:
+      user_service:
         condition: service_started
-      product-service:
+      product_service:
         condition: service_started
       localstack:
         condition: service_started
     ports:
       - "8080:8080"
+    volumes:
+      - ./coverage:/coverage
+      - ./order_service/coverage:/svc_coverage
 
   apigateway:
-    build:
-      context: .
-      dockerfile: api-gateway/Dockerfile
-    container_name: apigateway-go
+    build: ./apigateway
+    container_name: apigateway
     restart: "no"
     stop_grace_period: 20s
     environment:
-      USER_SERVICE_URL: http://user-service:8082/api/v1
-      PRODUCT_SERVICE_URL: http://product-service:8081/api/v1
-      ORDER_SERVICE_URL: http://order-service:8080/api/v1
+      USER_SERVICE_URL: http://user_service:8082/api/v1
+      PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
+      ORDER_SERVICE_URL: http://order_service:8080/api/v1
+      FLASK_RUN_PORT: "8083"
+      COVERAGE: "1"
     depends_on:
-      user-service:
+      user_service:
         condition: service_started
-      product-service:
+      product_service:
         condition: service_started
-      order-service:
+      order_service:
         condition: service_started
     ports:
       - "8083:8083"
+    volumes:
+      - ./coverage:/coverage
+      - ./apigateway/coverage:/svc_coverage

@@ -123,3 +123,4 @@ func proxy(c *gin.Context, baseURL, subpath string) {
 
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), respBody)
 }
+

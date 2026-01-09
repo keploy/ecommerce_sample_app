@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o /user-service ./cmd/userservice
+RUN CGO_ENABLED=0 GOOS=linux go build -o /product-service ./product_service
 
 # Runtime
 FROM alpine:3.19
@@ -18,8 +18,9 @@ FROM alpine:3.19
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
-COPY --from=builder /user-service .
+COPY --from=builder /product-service .
 
-EXPOSE 8082
+EXPOSE 8081
 
-CMD ["./user-service"]
+CMD ["./product-service"]
+
