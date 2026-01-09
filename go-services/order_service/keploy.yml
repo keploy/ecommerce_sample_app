@@ -24,10 +24,25 @@ test:
             },
             body: {
                 "id": [],
+                "requestId": [],
+                "serverTime": [],
+                "timestamp": [],
+                "uptime.human": [],
+                "uptime.seconds": [],
             }
         }
-        test-sets: {}
-    delay: 5
+        test-sets: {
+            "test-set-8": {
+                body: {
+                    "generatedAt": [],
+                    "randomData.randomNum": [],
+                    "randomData.timestamp": [],
+                    "randomData.uuid": [],
+                    "serverUptime": [],
+                }
+            }
+        }
+    delay: 10
     host: ""
     port: 0
     apiTimeout: 50
