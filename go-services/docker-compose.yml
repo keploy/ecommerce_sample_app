@@ -147,6 +147,7 @@ services:
       SQS_QUEUE_URL: http://localstack:4566/000000000000/order-events
       FLASK_RUN_PORT: "8080"
       COVERAGE: "1"
+      GOCOVERDIR: /svc_coverage
     depends_on:
       mysql-orders:
         condition: service_healthy
@@ -187,3 +188,5 @@ services:
     volumes:
       - ./coverage:/coverage
       - ./apigateway/coverage:/svc_coverage
+
+
