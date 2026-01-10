@@ -41,7 +41,7 @@ type Config struct {
 
 // Load loads configuration from environment variables
 func Load() *Config {
-	jwtTTL, _ := strconv.Atoi(getEnv("JWT_TTL_SECONDS", "2592000")) // 30 days default
+	jwtTTL, _ := strconv.Atoi(getEnv("JWT_TTL_SECONDS", "10")) // 30 days default
 	port, _ := strconv.Atoi(getEnv("PORT", "8080"))
 	resetAdmin := getEnv("RESET_ADMIN_PASSWORD", "false")
 

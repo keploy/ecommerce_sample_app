@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
@@ -10,15 +10,16 @@ RUN go mod download
 COPY . .
 
 # Download the time freeze agent for amd64
-# ADD https://keploy-enterprise.s3.us-west-2.amazonaws.com/releases/latest/assets/go_freeze_time_amd64 /lib/keploy/go_freeze_time_amd64
-# # Set suitable permissions
-# RUN chmod +x /lib/keploy/go_freeze_time_amd64
-# # Run the binary
-# RUN /lib/keploy/go_freeze_time_amd64
+ADD https://keploy-enterprise.s3.us-west-2.amazonaws.com/releases/latest/assets/go_freeze_time_amd64 /lib/keploy/go_freeze_time_amd64
+# Set suitable permissions
+RUN chmod +x /lib/keploy/go_freeze_time_amd64
+# Run the binary
+RUN /lib/keploy/go_freeze_time_amd64
 # # Build with fake time (during test mode)
-# RUN go build -tags=faketime -o /order-service ./order_service
+RUN go build -tags=faketime -o /order-service ./order_service
+# RUN go build -o /order-service ./order_service
 
-RUN go build -cover -covermode=atomic -coverpkg=./... -o /order-service ./order_service
+# RUN go build -cover -covermode=atomic -coverpkg=./... -o /order-service ./order_service
 
 # Runtime
 FROM alpine:3.19
