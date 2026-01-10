@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-users
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+  selector:
+    app: mysql-users
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-users
+spec:
+  selector:
+    matchLabels:
+      app: mysql-users
+  template:
+    metadata:
+      labels:
+        app: mysql-users
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        volumeMounts:
+        - name: init-script
+          mountPath: /docker-entrypoint-initdb.d
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "root"
+        - name: MYSQL_DATABASE
+          value: "user_db"
+        - name: MYSQL_USER
+          value: "user"
+        - name: MYSQL_PASSWORD
+          value: "password"
+        ports:
+        - containerPort: 3306
+        livenessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-P", "3306", "-u", "root", "-proot"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-P", "3306", "-u", "root", "-proot"]
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 5
+      volumes:
+      - name: init-script
+        configMap:
+          name: mysql-users-init

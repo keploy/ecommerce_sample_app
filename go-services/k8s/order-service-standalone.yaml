@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service-standalone-svc
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  selector:
+    app: order-service-standalone
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: order-service-standalone
+  labels:
+    app: order-service-standalone
+spec:
+  containers:
+  - name: order-service
+    image: order-service:latest
+    imagePullPolicy: Never
+    env:
+    - name: DB_HOST
+      value: "mysql-orders"
+    - name: DB_USER
+      value: "user"
+    - name: DB_PASSWORD
+      value: "password"
+    - name: DB_NAME
+      value: "order_db"
+    - name: USER_SERVICE_URL
+      value: "http://user-service:8082/api/v1"
+    - name: PRODUCT_SERVICE_URL
+      value: "http://product-service:8081/api/v1"
+    - name: AWS_REGION
+      value: "us-east-1"
+    - name: AWS_ACCESS_KEY_ID
+      value: "test"
+    - name: AWS_SECRET_ACCESS_KEY
+      value: "test"
+    - name: AWS_ENDPOINT
+      value: "http://localstack:4566"
+    - name: SQS_QUEUE_URL
+      value: "http://localstack:4566/000000000000/order-events"
+    - name: FLASK_RUN_PORT
+      value: "8080"
+    - name: JWT_SECRET
+      value: "dev-secret-change-me"
+    ports:
+    - containerPort: 8080
+  - name: keploy-agent
+    image: ghcr.io/keploy/keploy:latest
+    imagePullPolicy: Always
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        keploy test --path /keploy --delay 10
+    volumeMounts:
+    - name: keploy-data
+      mountPath: /keploy
+    env:
+    - name: KEPLOY_MODE
+      value: "test"
+  volumes:
+  - name: keploy-data
+    hostPath:
+      path: /home/ashish/asish_workspace/flipkart-jan/ecommerce_sample_app/go-services/order_service/keploy
+      type: Directory
+
+
