@@ -67,7 +67,14 @@ keploy dedup
 
 k8s setup
 
+
+
 first set up a new cluster
+
+```bash
+kind delete cluster
+kind create cluster --config kind-config.yaml
+```
 
 run the following command to load the images into the cluster:
 
