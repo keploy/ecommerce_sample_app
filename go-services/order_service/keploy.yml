@@ -40,17 +40,24 @@ test:
                     "randomData.uuid": [],
                     "serverUptime": [],
                 }
+            },
+            "test-set-9": {
+                body: {
+                    "generatedAt": [],
+                    "randomData.randomNum": [],
+                    "serverUptime": [],
+                }
             }
         }
     delay: 10
     host: ""
     port: 0
-    apiTimeout: 50
+    apiTimeout: 10
     skipCoverage: false
-    coverageReportPath: ""
+    coverageReportPath: "./coverage-reports"
     ignoreOrdering: true
     mongoPassword: default@123
-    language: ""
+    language: go
     removeUnusedMocks: false
     fallBackOnMiss: false
     jacocoAgentPath: ""
