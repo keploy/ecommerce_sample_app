@@ -1,3 +1,7 @@
+install keploy 
+
+curl --silent -O -L https://keploy.io/ent/install.sh && source install.sh
+
 Local setup
 
 currently the token expiration is set to 10 seconds in the config. so we need to change it to a higher value if freezeTime is not being used.
