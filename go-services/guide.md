@@ -38,7 +38,7 @@ docker build -f order_service/Dockerfile -t order-service .
 then you can run the following command to start the test mode:
 
 ```bash
-keploy test -c "docker compose up" --container-name="order_service" --delay 50 --path="./order_service" --config-path="./order_service" -t test-set-11 --freezeTime
+keploy test -c "docker compose up" --container-name="order_service" --delay 50 --path="./order_service" --config-path="./order_service" -t test-set-0 --freezeTime
 ```
 
 Now you can run the dynamic dedup for these tests, because some of the tests that was recorded was similar to each other.
@@ -51,8 +51,10 @@ you can increase the expiration time to 100 seconds to make sure that the tests 
 docker build -f order_service/Dockerfile -t order-service .
 ```
 
+record again if you have increased the expiration time and then run the test command with dedup flag. 
+
 ```bash
-keploy test -c "docker compose up" --container-name="order_service" --delay 50 --path="./order_service" --config-path="./order_service" -t test-set-11 --dedup
+keploy test -c "docker compose up" --container-name="order_service" --delay 50 --path="./order_service" --config-path="./order_service" -t test-set-0 --dedup
 ```
 
 This will dedup the tests and it will generate the `dedupData.yaml` file which will have all the lines that was executed in the source code for every test case that got replayed.
