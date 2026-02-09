@@ -24,10 +24,10 @@ type Config struct {
 	ProductServiceURL string
 	OrderServiceURL   string
 
-	// AWS/SQS
-	AWSRegion   string
-	AWSEndpoint string
-	SQSQueueURL string
+	// Kafka
+	KafkaBrokers []string
+	KafkaTopic   string
+	KafkaGroupID string
 
 	// Server
 	Port int
@@ -41,9 +41,13 @@ type Config struct {
 
 // Load loads configuration from environment variables
 func Load() *Config {
-	jwtTTL, _ := strconv.Atoi(getEnv("JWT_TTL_SECONDS", "10")) // 30 days default
+	jwtTTL, _ := strconv.Atoi(getEnv("JWT_TTL_SECONDS", "3600")) // 1 hour default
 	port, _ := strconv.Atoi(getEnv("PORT", "8080"))
 	resetAdmin := getEnv("RESET_ADMIN_PASSWORD", "false")
+
+	// Parse Kafka brokers (comma-separated)
+	kafkaBrokersStr := getEnv("KAFKA_BROKERS", "kafka:9092")
+	kafkaBrokers := parseBrokers(kafkaBrokersStr)
 
 	return &Config{
 		DBHost:     getEnv("DB_HOST", "localhost"),
@@ -59,9 +63,9 @@ func Load() *Config {
 		ProductServiceURL: getEnv("PRODUCT_SERVICE_URL", "http://localhost:8081/api/v1"),
 		OrderServiceURL:   getEnv("ORDER_SERVICE_URL", "http://localhost:8080/api/v1"),
 
-		AWSRegion:   getEnv("AWS_REGION", "us-east-1"),
-		AWSEndpoint: getEnv("AWS_ENDPOINT", ""),
-		SQSQueueURL: getEnv("SQS_QUEUE_URL", ""),
+		KafkaBrokers: kafkaBrokers,
+		KafkaTopic:   getEnv("KAFKA_TOPIC", "order-events"),
+		KafkaGroupID: getEnv("KAFKA_GROUP_ID", "order-service-group"),
 
 		Port: port,
 
@@ -70,6 +74,62 @@ func Load() *Config {
 		AdminPassword: getEnv("ADMIN_PASSWORD", "admin123"),
 		ResetAdminPwd: resetAdmin == "1" || resetAdmin == "true" || resetAdmin == "yes",
 	}
+}
+
+// parseBrokers splits a comma-separated broker string into a slice
+func parseBrokers(brokers string) []string {
+	if brokers == "" {
+		return []string{"kafka:9092"}
+	}
+	var result []string
+	for _, b := range splitAndTrim(brokers, ",") {
+		if b != "" {
+			result = append(result, b)
+		}
+	}
+	if len(result) == 0 {
+		return []string{"kafka:9092"}
+	}
+	return result
+}
+
+// splitAndTrim splits a string and trims whitespace from each part
+func splitAndTrim(s, sep string) []string {
+	parts := make([]string, 0)
+	for _, p := range splitString(s, sep) {
+		trimmed := trimSpace(p)
+		if trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	return parts
+}
+
+// splitString is a simple string split implementation
+func splitString(s, sep string) []string {
+	var result []string
+	start := 0
+	for i := 0; i <= len(s)-len(sep); i++ {
+		if s[i:i+len(sep)] == sep {
+			result = append(result, s[start:i])
+			start = i + len(sep)
+		}
+	}
+	result = append(result, s[start:])
+	return result
+}
+
+// trimSpace removes leading and trailing whitespace
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	return s[start:end]
 }
 
 // JWTExpiry returns the JWT expiry duration

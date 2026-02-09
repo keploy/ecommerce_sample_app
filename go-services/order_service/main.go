@@ -17,23 +17,21 @@ import (
 
 	_ "github.com/keploy/go-sdk/v3/keploy"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
 	"github.com/keploy/ecommerce-sample-go/internal/config"
 	"github.com/keploy/ecommerce-sample-go/internal/db"
+	"github.com/keploy/ecommerce-sample-go/internal/kafka"
 	"github.com/keploy/ecommerce-sample-go/internal/middleware"
 )
 
 var (
 	cfg             *config.Config
 	database        *sqlx.DB
-	sqsClient       *sqs.Client
+	kafkaProducer   *kafka.Producer
+	kafkaConsumer   *kafka.Consumer
 	serverStartTime time.Time
 )
 
@@ -47,8 +45,13 @@ func main() {
 	database = db.MustConnect(cfg.DBHost, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 	defer database.Close()
 
-	// Initialize SQS client
-	initSQS()
+	// Initialize Kafka producer
+	initKafka()
+	defer closeKafka()
+
+	// Start Kafka consumer for event logging
+	startKafkaConsumer()
+	defer closeKafkaConsumer()
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
@@ -89,48 +92,66 @@ func main() {
 	srv.Shutdown(ctx)
 }
 
-func initSQS() {
-	ctx := context.Background()
-
-	optFns := []func(*awsconfig.LoadOptions) error{
-		awsconfig.WithRegion(cfg.AWSRegion),
-		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			os.Getenv("AWS_ACCESS_KEY_ID"),
-			os.Getenv("AWS_SECRET_ACCESS_KEY"),
-			"",
-		)),
-	}
-
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, optFns...)
-	if err != nil {
-		log.Printf("Warning: Failed to load AWS config: %v", err)
-		return
-	}
-
-	sqsOpts := []func(*sqs.Options){}
-	if cfg.AWSEndpoint != "" {
-		sqsOpts = append(sqsOpts, func(o *sqs.Options) {
-			o.BaseEndpoint = aws.String(cfg.AWSEndpoint)
-		})
-	}
-
-	sqsClient = sqs.NewFromConfig(awsCfg, sqsOpts...)
+// initKafka initializes the Kafka producer
+func initKafka() {
+	log.Printf("Initializing Kafka producer with brokers: %v, topic: %s", cfg.KafkaBrokers, cfg.KafkaTopic)
+	kafkaProducer = kafka.NewProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
+	log.Println("Kafka producer initialized successfully")
 }
 
+// closeKafka closes the Kafka producer connection
+func closeKafka() {
+	if kafkaProducer != nil {
+		if err := kafkaProducer.Close(); err != nil {
+			log.Printf("Error closing Kafka producer: %v", err)
+		}
+	}
+}
+
+// startKafkaConsumer starts a background consumer to log events
+func startKafkaConsumer() {
+	log.Printf("Initializing Kafka consumer for topic: %s, group: %s", cfg.KafkaTopic, cfg.KafkaGroupID)
+	kafkaConsumer = kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID)
+
+	go func() {
+		log.Println("Starting background Kafka consumer...")
+		ctx := context.Background()
+		err := kafkaConsumer.Start(ctx, func(ctx context.Context, eventType string, payload map[string]interface{}) error {
+			log.Printf(">>> KAFKA EVENT RECEIVED: [%s] -> %v", eventType, payload)
+			return nil
+		})
+		if err != nil && err != context.Canceled {
+			log.Printf("Kafka consumer error: %v", err)
+		}
+	}()
+}
+
+// closeKafkaConsumer closes the Kafka consumer connection
+func closeKafkaConsumer() {
+	if kafkaConsumer != nil {
+		if err := kafkaConsumer.Close(); err != nil {
+			log.Printf("Error closing Kafka consumer: %v", err)
+		}
+	}
+}
+
+// emitEvent sends an event to Kafka
 func emitEvent(eventType string, payload map[string]interface{}) {
-	if sqsClient == nil || cfg.SQSQueueURL == "" {
+	if kafkaProducer == nil {
 		return
 	}
 
-	payload["eventType"] = eventType
-	body, _ := json.Marshal(payload)
+	// Clone payload to avoid modifying the original
+	kafkaPayload := make(map[string]interface{})
+	for k, v := range payload {
+		kafkaPayload[k] = v
+	}
 
-	_, err := sqsClient.SendMessage(context.Background(), &sqs.SendMessageInput{
-		QueueUrl:    aws.String(cfg.SQSQueueURL),
-		MessageBody: aws.String(string(body)),
-	})
-	if err != nil {
-		log.Printf("Failed to send SQS message: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := kafkaProducer.SendEvent(ctx, eventType, kafkaPayload); err != nil {
+		log.Printf("Failed to send Kafka message: %v", err)
 	}
 }
 
@@ -582,8 +603,8 @@ func handleHealth(c *gin.Context) {
 		"requestId": uuid.New().String(),
 		"version":   "1.0.0",
 		"environment": gin.H{
-			"dbHost": cfg.DBHost,
-			"region": cfg.AWSRegion,
+			"dbHost":       cfg.DBHost,
+			"kafkaBrokers": cfg.KafkaBrokers,
 		},
 	})
 }
