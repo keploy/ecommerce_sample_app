@@ -23,11 +23,12 @@ func NewProducer(brokers []string, topic string) *Producer {
 		Addr:         kafka.TCP(brokers...),
 		Topic:        topic,
 		Balancer:     &kafka.LeastBytes{},
-		BatchTimeout: 10 * time.Millisecond, // Low latency for demo
+		BatchTimeout: 0,                 // Disable batching for deterministic behavior
 		WriteTimeout: 10 * time.Second,
 		ReadTimeout:  10 * time.Second,
-		RequiredAcks: kafka.RequireOne,
-		Async:        false, // Synchronous writes for reliability
+		RequiredAcks: kafka.RequireAll, // More deterministic than RequireOne
+		Async:        false,             // Synchronous writes for reliability
+		MaxAttempts:  1,                 // Disable retries to avoid connection ID mismatches
 	}
 
 	log.Printf("Kafka producer initialized for topic: %s, brokers: %v", topic, brokers)

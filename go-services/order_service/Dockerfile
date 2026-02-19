@@ -15,9 +15,8 @@ ADD https://keploy-enterprise.s3.us-west-2.amazonaws.com/releases/latest/assets/
 RUN chmod +x /lib/keploy/go_freeze_time_amd64
 # Run the binary
 RUN /lib/keploy/go_freeze_time_amd64
-# # Build with fake time (during test mode)
+# Build with fake time (during test mode)
 RUN go build -tags=faketime -o /order-service ./order_service
-# RUN go build -o /order-service ./order_service
 
 # RUN go build -cover -covermode=atomic -coverpkg=./... -o /order-service ./order_service
 

@@ -301,15 +301,17 @@ docker compose down -v
 
 ---
 
-## Keploy Recording
+## Keploy Recording & Testing
 
-To run Keploy record mode for order service:
+### Record Test Cases
+
+To record API calls and their dependencies (Kafka, MySQL, HTTP):
 
 ```bash
-keploy record -c "docker compose up" --container-name="order_service" --build-delay 40 --path="./order_service" --config-path="./order_service"
+keploy record -c "docker compose up" --container-name="order_service" --build-delay 60 --path="./order_service"
 ```
 
-Wait for services to start, then run the test script:
+Wait for services to start, then generate traffic using the test script:
 
 ```bash
 python3 -m venv venv
@@ -318,5 +320,19 @@ pip install requests
 python3 test_api_script.py
 ```
 
-This will record all test cases in `order_service/keploy` folder.
+Press `Ctrl+C` to stop recording. Test cases are saved in `order_service/keploy/` folder.
+
+### Run Tests (Replay)
+
+To replay recorded tests with mocked dependencies:
+
+```bash
+keploy test -c "docker compose up" --container-name="order_service" --build-delay 60 --path="./order_service"
+```
+
+This will:
+- Start the services via docker compose
+- Replay all recorded HTTP requests
+- Use mocked Kafka, MySQL, and HTTP responses
+- Compare actual vs expected responses
 

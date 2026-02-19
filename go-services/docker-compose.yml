@@ -112,8 +112,14 @@ services:
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order-events --partitions 3 --replication-factor 1
       echo 'Topics created successfully!'
       kafka-topics --bootstrap-server kafka:9092 --list
+      tail -f /dev/null
       "
     restart: "no"
+    healthcheck:
+      test: [ "CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
 
   user_service:
     build:
@@ -133,6 +139,7 @@ services:
       ADMIN_PASSWORD: admin123
       RESET_ADMIN_PASSWORD: "true"
       COVERAGE: "1"
+      JWT_TTL_SECONDS: "259200"  # 3 days (72 hours) for Keploy testing
     depends_on:
       mysql-users:
         condition: service_healthy
@@ -194,7 +201,7 @@ services:
       product_service:
         condition: service_started
       kafka-init:
-        condition: service_completed_successfully
+        condition: service_healthy
     ports:
       - "8080:8080"
     volumes:

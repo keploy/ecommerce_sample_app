@@ -30,8 +30,8 @@ import (
 var (
 	cfg             *config.Config
 	database        *sqlx.DB
-	kafkaProducer   *kafka.Producer
-	kafkaConsumer   *kafka.Consumer
+	kafkaProducer   *kafka.SafeProducer
+	kafkaConsumer   *kafka.SafeConsumer
 	serverStartTime time.Time
 )
 
@@ -92,11 +92,33 @@ func main() {
 	srv.Shutdown(ctx)
 }
 
-// initKafka initializes the Kafka producer
+// isKeployMode detects if the service is running in Keploy test mode
+func isKeployMode() bool {
+	return os.Getenv("KEPLOY_MODE") != "" ||
+		os.Getenv("KEPLOY_TEST_ID") != "" ||
+		os.Getenv("KEPLOY_TEST_RUN") != ""
+}
+
+// getKafkaTimeout returns the appropriate timeout for Kafka initialization
+// based on the current environment
+func getKafkaTimeout() time.Duration {
+	// During Keploy test replay, use a short timeout since Kafka is mocked
+	// During recording, use a longer timeout to ensure Kafka is ready
+	if os.Getenv("KEPLOY_MODE") == "test" {
+		return 5 * time.Second // Short timeout during test replay
+	}
+	if isKeployMode() {
+		return 60 * time.Second // Long timeout during recording to capture mocks
+	}
+	return 5 * time.Second // Normal timeout in production
+}
+
+// initKafka initializes the Kafka producer with timeout-based connection
 func initKafka() {
-	log.Printf("Initializing Kafka producer with brokers: %v, topic: %s", cfg.KafkaBrokers, cfg.KafkaTopic)
-	kafkaProducer = kafka.NewProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
-	log.Println("Kafka producer initialized successfully")
+	timeout := getKafkaTimeout()
+	log.Printf("Initializing Kafka producer with brokers: %v, topic: %s, timeout: %v", cfg.KafkaBrokers, cfg.KafkaTopic, timeout)
+	kafkaProducer = kafka.NewSafeProducer(cfg.KafkaBrokers, cfg.KafkaTopic, timeout)
+	log.Println("Kafka producer initialization complete")
 }
 
 // closeKafka closes the Kafka producer connection
@@ -110,20 +132,27 @@ func closeKafka() {
 
 // startKafkaConsumer starts a background consumer to log events
 func startKafkaConsumer() {
-	log.Printf("Initializing Kafka consumer for topic: %s, group: %s", cfg.KafkaTopic, cfg.KafkaGroupID)
-	kafkaConsumer = kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID)
+	// Check if running in Keploy test mode
+	keployTestMode := os.Getenv("KEPLOY_MODE") == "test"
+	log.Printf("Kafka consumer: initializing ... keployTestMode: %v", keployTestMode)
+	
+	// Skip consumer in test mode to avoid infinite retry loops
+	if keployTestMode {
+		log.Println("⚠️  Keploy test mode detected. Skipping Kafka consumer startup.")
+		log.Println("    Consumer group operations (JoinGroup, SyncGroup, Heartbeat) will not be attempted.")
+		return
+	}
+	
+	timeout := getKafkaTimeout()
+	log.Printf("Initializing Kafka consumer for topic: %s, group: %s, timeout: %v", cfg.KafkaTopic, cfg.KafkaGroupID, timeout)
+	kafkaConsumer = kafka.NewSafeConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID)
 
-	go func() {
-		log.Println("Starting background Kafka consumer...")
-		ctx := context.Background()
-		err := kafkaConsumer.Start(ctx, func(ctx context.Context, eventType string, payload map[string]interface{}) error {
-			log.Printf(">>> KAFKA EVENT RECEIVED: [%s] -> %v", eventType, payload)
-			return nil
-		})
-		if err != nil && err != context.Canceled {
-			log.Printf("Kafka consumer error: %v", err)
-		}
-	}()
+	ctx := context.Background()
+	log.Println("Starting background Kafka consumer asynchronously...")
+	kafkaConsumer.StartAsync(ctx, func(ctx context.Context, eventType string, payload map[string]interface{}) error {
+		log.Printf(">>> KAFKA EVENT RECEIVED: [%s] -> %v", eventType, payload)
+		return nil
+	}, timeout)
 }
 
 // closeKafkaConsumer closes the Kafka consumer connection
@@ -591,6 +620,28 @@ func handlePayOrder(c *gin.Context) {
 func handleHealth(c *gin.Context) {
 	uptime := time.Since(serverStartTime)
 
+	// Check Kafka connection status
+	kafkaStatus := gin.H{
+		"producer": gin.H{
+			"connected": false,
+		},
+		"consumer": gin.H{
+			"connected": false,
+		},
+	}
+
+	if kafkaProducer != nil {
+		kafkaStatus["producer"] = gin.H{
+			"connected": kafkaProducer.IsConnected(),
+		}
+	}
+
+	if kafkaConsumer != nil {
+		kafkaStatus["consumer"] = gin.H{
+			"connected": kafkaConsumer.IsConnected(),
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":     "healthy",
 		"service":    "order-service",
@@ -606,6 +657,7 @@ func handleHealth(c *gin.Context) {
 			"dbHost":       cfg.DBHost,
 			"kafkaBrokers": cfg.KafkaBrokers,
 		},
+		"kafka": kafkaStatus,
 	})
 }
 
