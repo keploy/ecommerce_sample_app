@@ -1,105 +1,400 @@
-# E-commerce Microservices (Python, Flask, MySQL, SQS)
+make this perfect
 
-Services
+# 📦 E-commerce Microservices
 
-- order_service (A): REST + MySQL + publishes SQS order events
-- product_service (B): REST + MySQL (catalog)
-- user_service (C): REST + MySQL (users)
+**Tech Stack:** Python • Flask • MySQL • Docker • LocalStack (SQS) • Keploy
 
-Infra
+This repository implements a **microservices-based e-commerce backend** built using **Flask**.  
+Each service runs independently with its own database and communicates via **REST APIs** and **AWS SQS (LocalStack)** for event-driven workflows.
 
-- 3x MySQL containers
-- LocalStack (SQS)
-- Docker Compose to orchestrate
+---
 
-Quick start
+## 🏗️ Architecture Overview
 
-- docker compose up -d --build
-- docker compose logs -f order_service product_service user_service
-- docker compose down -v
+### Services
 
-APIs
+| Service | Responsibility |
+|---|---|
+| API Gateway | Entry point & request routing |
+| Order Service | Order lifecycle management |
+| Product Service | Product catalog & inventory |
+| User Service | User management |
 
-- OpenAPI specs in each service under openapi.yaml
+### Infrastructure
 
-# E-commerce Microservices Architecture
+- **MySQL** → Separate database per service  
+- **LocalStack SQS** → Messaging queue simulation  
+- **Docker Compose** → Service orchestration  
 
-This repo contains three Python (Flask) microservices orchestrated with Docker Compose, each with its own MySQL database, plus LocalStack SQS for messaging.
+Architecture documentation:
 
-## Architecture (single diagram)
 
-```mermaid
-flowchart LR
-  client([Client / Postman])
+docs/architecture.md
 
-  subgraph "Order Service :8080"
-    order_svc([Order Service])
-    o1["POST /api/v1/orders"]
-    o2["GET /api/v1/orders"]
-    o3["GET /api/v1/orders/{id}"]
-    o4["GET /api/v1/orders/{id}/details"]
-    o5["POST /api/v1/orders/{id}/pay"]
-    o6["POST /api/v1/orders/{id}/cancel"]
-    o7["GET /health"]
-    order_svc --- o1
-    order_svc --- o2
-    order_svc --- o3
-    order_svc --- o4
-    order_svc --- o5
-    order_svc --- o6
-    order_svc --- o7
-  end
 
-  subgraph "Product Service :8081"
-    product_svc([Product Service])
-    p1["CRUD /api/v1/products"]
-    p2["POST /api/v1/products/{id}/reserve"]
-    p3["POST /api/v1/products/{id}/release"]
-    p4["GET /api/v1/products/search"]
-    p5["GET /health"]
-    product_svc --- p1
-    product_svc --- p2
-    product_svc --- p3
-    product_svc --- p4
-    product_svc --- p5
-  end
+---
 
-  subgraph "User Service :8082"
-    user_svc([User Service])
-    u1["POST /api/v1/users"]
-    u2["GET /api/v1/users/{id}"]
-    u3["POST /api/v1/login"]
-    u4["GET /health"]
-    user_svc --- u1
-    user_svc --- u2
-    user_svc --- u3
-    user_svc --- u4
-  end
+## 📁 Project Structure
 
-  subgraph Datastores
-    dborders[(MySQL order_db)]
-    dbproducts[(MySQL product_db)]
-    dbusers[(MySQL user_db)]
-  end
 
-  sqs[(LocalStack SQS: order-events)]
+apigateway/
 
-  client --> order_svc
-  client --> product_svc
-  client --> user_svc
+├── app.py
 
-  order_svc --> dborders
-  product_svc --> dbproducts
-  user_svc --> dbusers
+├── entrypoint.sh
 
-  order_svc --> user_svc
-  order_svc --> product_svc
+└── openapi.yaml
 
-  order_svc --> sqs
+
+order_service/
+
+├── app.py
+
+├── db.sql
+
+├── entrypoint.sh
+
+├── keploy.yml
+
+├── migrate.py
+
+├── openapi.yaml
+
+├── requirements.txt
+
+├── migrations/
+
+│ ├── 0001_init.sql
+
+│ └── 0002_shipping_address_id.sql
+
+└── keploy/
+
+├── ai/tests/test1.yaml → test36.yaml
+
+└── manual/tests/
+
+
+product_service/
+
+├── app.py
+
+├── db.sql
+
+├── entrypoint.sh
+
+├── keploy.yml
+
+├── migrate.py
+
+├── openapi.yaml
+
+├── requirements.txt
+
+├── migrations/
+
+│ ├── 0001_init.sql
+
+│ └── 0002_shipping_address_id.sql
+
+└── keploy/
+
+├── ai/tests/test1.yaml → test36.yaml
+
+└── manual/tests/
+
+user_service/
+├── app.py
+
+├── db.sql
+
+├── entrypoint.sh
+
+├── keploy.yml
+
+├── migrate.py
+
+├── openapi.yaml
+
+├── requirements.txt
+
+├── migrations/
+
+│ ├── 0001_init.sql
+
+│ └── 0002_shipping_address_id.sql
+
+└── keploy/
+
+├── ai/tests/test1.yaml → test36.yaml
+
+└── manual/tests/
+
+localstack/
+
+├── 01-create-queues.sh
+
+└── 01-queues.sh
+
+postman/
+
+├── collection.gateway.json
+
+├── collection.microservices.json
+
+└── environment/local.json
+
+
+coverage/
+
+├── .coverage.apigateway.combined
+
+├── .coverage.order_service.combined
+
+├── .coverage.product_service.combined
+
+└── .coverage.user_service.combined
+
+
+
+---
+
+## 🚀 Quick Start
+
+### 1️⃣ Start Services
+```bash
+docker compose up -d --build
 ```
+**2️⃣ View Logs**
+```bash
+docker compose logs -f apigateway order_service product_service user_service
+```
+**3️⃣ Stop Services**
+```bash
+docker compose down -v
+```
+**🔌 Services Description**
 
-Key behaviors
+API Gateway
 
-- Order creation validates user and products, reserves stock, persists order + items, emits SQS event.
-- Idempotency: POST /orders supports Idempotency-Key to avoid duplicate orders.
-- Status transitions: PENDING → PAID or CANCELLED (cancel releases stock).
+Location: apigateway/
+
+**Responsibilities:**
+
+- Routes external requests to services
+
+- Aggregates responses when required
+
+- Provides OpenAPI documentation
+
+**Order Service**
+
+Location: order_service/
+
+**Responsibilities:**
+
+- Create orders
+
+- Validate users via user_service
+
+- Validate products via product_service
+
+- Reserve/release stock
+
+**Persist orders**
+
+- Publish SQS events
+
+- Order Status Flow
+- PENDING → PAID
+- PENDING → CANCELLED (releases stock)
+- Idempotency
+
+**Uses header:**
+
+- Idempotency-Key
+
+- Prevents duplicate order creation.
+
+- Product Service
+
+**Location**: product_service/
+
+Responsibilities:
+
+- Product CRUD
+
+- Stock management
+
+- Stock reservation for orders
+
+- User Service
+
+- Location: user_service/
+
+**Responsibilities:**
+- User CRUD
+
+- User validation for orders
+
+**🗄️ Database**
+
+Each service has:
+
+- db.sql
+- migrations/
+- migrate.py
+
+Migrations run automatically via container entrypoint.
+
+**📨 Messaging (SQS via LocalStack)**
+
+Setup scripts:
+
+localstack/01-create-queues.sh
+localstack/01-queues.sh
+
+Used for:
+
+- Order events
+
+- Async processing
+
+**🧪 Testing (Keploy)**
+
+Each service includes:
+
+keploy/
+  ai/tests/
+  manual/tests/
+Test Cases
+
+**AI-generated tests:**
+
+- test1.yaml
+- Coverage Includes
+- Order Service Tests
+
+- Create order success
+
+- Duplicate order prevention
+
+- Invalid user
+
+- Invalid product
+
+- Stock unavailable
+
+- Order cancellation
+
+- Order payment
+
+- Idempotency validation
+
+- Product Service Tests
+
+- Create product
+
+- Update product
+
+- Delete product
+
+- Stock updates
+
+- Reserve stock
+
+- Release stock
+
+**User Service Tests**
+
+- Create user
+
+- Update user
+
+- Delete user
+
+- Fetch user
+
+- Invalid user scenarios
+
+**Gateway Tests**
+
+- Routing validation
+
+- Aggregated responses
+
+- Error propagation
+
+- Edge Cases
+
+- Invalid payload
+
+- Missing headers
+
+- Service unavailable
+
+- Database failures
+
+**📬 API Documentation**
+
+Each service exposes:
+
+- openapi.yaml
+
+**Postman collections:**
+
+postman/
+Environment:
+environment/local.json
+**📊 Coverage Reports**
+
+Coverage stored in:
+coverage/
+- Contains combined coverage per service.
+
+**🛠️ Development Workflow**
+- Adding a New Endpoint
+
+- Update app.py
+
+- Update openapi.yaml
+
+- Add DB migration if needed
+
+- Add Keploy tests
+
+- Update Postman collection
+
+- Run services locally
+
+- Submit PR
+
+**🤝 Contributing**
+
+- Fork repository
+
+- Create feature branch
+
+- Commit changes
+
+- Add/update tests (test1 → test36 style)
+
+- Ensure services run
+
+- Create Pull Request
+
+**⚡ Order Creation Flow**
+
+Validate user
+
+Validate products
+
+Reserve stock
+
+Save order
+
+Publish SQS event
+
+**📜 License**
+
+Open source — follow repository license.
