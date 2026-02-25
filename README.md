@@ -1,105 +1,155 @@
-# E-commerce Microservices (Python, Flask, MySQL, SQS)
+# E-Commerce Microservices
 
-Services
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://python.org)
+[![Flask](https://img.shields.io/badge/Flask-3.0-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docker.com)
+[![Keploy](https://img.shields.io/badge/Tested_with-Keploy-7C3AED)](https://keploy.io)
 
-- order_service (A): REST + MySQL + publishes SQS order events
-- product_service (B): REST + MySQL (catalog)
-- user_service (C): REST + MySQL (users)
+A Python/Flask e-commerce backend using microservices, each with its own MySQL database, an API Gateway, and SQS event messaging via LocalStack - all wired together with Docker Compose.
 
-Infra
+---
 
-- 3x MySQL containers
-- LocalStack (SQS)
-- Docker Compose to orchestrate
+## Services
 
-Quick start
+| Service | Port | Responsibility |
+|---|---|---|
+| API Gateway | `8083` | Single entry point - proxies all client requests |
+| Order Service | `8080` | Order lifecycle, stock reservation, SQS events |
+| Product Service | `8081` | Product catalog, inventory management |
+| User Service | `8082` | Auth, JWT issuance, user accounts & addresses |
+| LocalStack (SQS) | `4566` | Local AWS SQS - `order-events` queue |
 
-- docker compose up -d --build
-- docker compose logs -f order_service product_service user_service
-- docker compose down -v
+---
 
-APIs
+## Quick Start
 
-- OpenAPI specs in each service under openapi.yaml
+**Requires:** Docker Desktop (includes Compose)
 
-# E-commerce Microservices Architecture
-
-This repo contains three Python (Flask) microservices orchestrated with Docker Compose, each with its own MySQL database, plus LocalStack SQS for messaging.
-
-## Architecture (single diagram)
-
-```mermaid
-flowchart LR
-  client([Client / Postman])
-
-  subgraph "Order Service :8080"
-    order_svc([Order Service])
-    o1["POST /api/v1/orders"]
-    o2["GET /api/v1/orders"]
-    o3["GET /api/v1/orders/{id}"]
-    o4["GET /api/v1/orders/{id}/details"]
-    o5["POST /api/v1/orders/{id}/pay"]
-    o6["POST /api/v1/orders/{id}/cancel"]
-    o7["GET /health"]
-    order_svc --- o1
-    order_svc --- o2
-    order_svc --- o3
-    order_svc --- o4
-    order_svc --- o5
-    order_svc --- o6
-    order_svc --- o7
-  end
-
-  subgraph "Product Service :8081"
-    product_svc([Product Service])
-    p1["CRUD /api/v1/products"]
-    p2["POST /api/v1/products/{id}/reserve"]
-    p3["POST /api/v1/products/{id}/release"]
-    p4["GET /api/v1/products/search"]
-    p5["GET /health"]
-    product_svc --- p1
-    product_svc --- p2
-    product_svc --- p3
-    product_svc --- p4
-    product_svc --- p5
-  end
-
-  subgraph "User Service :8082"
-    user_svc([User Service])
-    u1["POST /api/v1/users"]
-    u2["GET /api/v1/users/{id}"]
-    u3["POST /api/v1/login"]
-    u4["GET /health"]
-    user_svc --- u1
-    user_svc --- u2
-    user_svc --- u3
-    user_svc --- u4
-  end
-
-  subgraph Datastores
-    dborders[(MySQL order_db)]
-    dbproducts[(MySQL product_db)]
-    dbusers[(MySQL user_db)]
-  end
-
-  sqs[(LocalStack SQS: order-events)]
-
-  client --> order_svc
-  client --> product_svc
-  client --> user_svc
-
-  order_svc --> dborders
-  product_svc --> dbproducts
-  user_svc --> dbusers
-
-  order_svc --> user_svc
-  order_svc --> product_svc
-
-  order_svc --> sqs
+```bash
+git clone https://github.com/keploy/ecommerce_sample_app.git
+cd ecommerce_sample_app
+docker compose up -d --build
 ```
 
-Key behaviors
+That is it. On first boot the stack will:
+- Run all DB migrations automatically
+- Seed an admin user: `admin` / `admin123`
+- Seed sample products (Laptop, Mouse)
+- Create the `order-events` SQS queue
 
-- Order creation validates user and products, reserves stock, persists order + items, emits SQS event.
-- Idempotency: POST /orders supports Idempotency-Key to avoid duplicate orders.
-- Status transitions: PENDING → PAID or CANCELLED (cancel releases stock).
+**Health check:**
+```bash
+curl http://localhost:8083/health
+```
+
+**Logs:**
+```bash
+docker compose logs -f
+```
+
+**Teardown:**
+```bash
+docker compose down -v   # -v removes data volumes
+```
+
+---
+
+## API
+
+All requests go through the gateway at `http://localhost:8083`. Every endpoint except `/api/v1/login` and `/health` requires `Authorization: Bearer <token>`.
+
+**Get a token:**
+```bash
+curl -s -X POST http://localhost:8083/api/v1/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+```
+
+| Service | Endpoints |
+|---|---|
+| **User** | `POST /api/v1/login` , `POST /api/v1/users` , `GET /api/v1/users/{id}` , `GET/POST /api/v1/users/{id}/addresses` |
+| **Product** | `GET/POST /api/v1/products` , `GET/PUT/DELETE /api/v1/products/{id}` , `GET /api/v1/products/search` , `POST /api/v1/products/{id}/reserve` , `POST /api/v1/products/{id}/release` |
+| **Order** | `GET/POST /api/v1/orders` , `GET /api/v1/orders/{id}` , `GET /api/v1/orders/{id}/details` , `POST /api/v1/orders/{id}/pay` , `POST /api/v1/orders/{id}/cancel` |
+
+Full OpenAPI specs: each service has an `openapi.yaml`. Import `postman/collection.gateway.json` + `postman/environment.local.json` for a ready-to-run Postman setup.
+
+---
+
+## Architecture
+
+```
+Client --> API Gateway (:8083)
+            |-- /users/*    --> User Service (:8082)    --> mysql-users (:3307)
+            |-- /products/* --> Product Service (:8081) --> mysql-products (:3308)
+            |-- /orders/*   --> Order Service (:8080)   --> mysql-orders (:3309)
+                                     |
+                                     |-- calls User Service    (validate user)
+                                     |-- calls Product Service (reserve / release stock)
+                                     +-- publishes --> SQS order-events (LocalStack :4566)
+```
+
+**Key behaviours:**
+- `POST /orders` validates the user, reserves product stock, persists the order, then emits an `ORDER_CREATED` event to SQS.
+- Supports `Idempotency-Key` header on order creation to prevent duplicates.
+- Cancelling an order releases reserved stock and emits `ORDER_CANCELLED`.
+- JWT (`HS256`) is issued by the User Service and verified by all services via a shared `JWT_SECRET`.
+
+---
+
+## Testing
+
+Tests live in `<service>/keploy/` - two suites per service:
+
+| Suite | Description |
+|---|---|
+| `ai/` | AI-generated tests recorded from live traffic (e.g. 36 tests for `order_service`) |
+| `manual/` | Hand-crafted test scenarios (e.g. 14 tests for `order_service`) |
+
+**Run tests (requires [Keploy CLI](https://keploy.io/docs)):**
+```bash
+docker compose up -d --build
+keploy test -c "docker compose up" --container-name order_service
+```
+
+Coverage reports are written to `coverage/` during test runs.
+
+---
+
+## Project Layout
+
+```
+ecommerce_sample_app/
+|-- docker-compose.yml
+|-- apigateway/           # Flask reverse proxy
+|-- order_service/
+|   |-- app.py
+|   |-- migrations/       # Versioned SQL files - auto-applied at startup
+|   +-- keploy/ai|manual/ # Keploy test suites
+|-- product_service/      # Same structure as order_service
+|-- user_service/         # Same structure as order_service
+|-- localstack/           # Queue init scripts (runs on LocalStack ready)
++-- postman/              # Import-ready Postman collections
+```
+
+---
+
+## Configuration
+
+Set in `docker-compose.yml`. Key variables:
+
+| Variable | Default | Note |
+|---|---|---|
+| `JWT_SECRET` | `dev-secret-change-me` | **Must change in production** |
+| `DB_HOST / DB_USER / DB_PASSWORD / DB_NAME` | per-service | Each service owns its own DB |
+| `AWS_ENDPOINT` | `http://localstack:4566` | Routes SQS traffic to LocalStack |
+| `ADMIN_PASSWORD` | `admin123` | Seeded admin credentials |
+
+---
+
+## Contributing
+
+1. Fork and create a branch (`feat/your-feature`, `fix/issue`, `docs/update`)
+2. Make changes - keep services decoupled, update `openapi.yaml` for API changes, add new migration files for schema changes (never edit existing ones)
+3. Test: `docker compose up -d --build` then run Keploy tests
+4. Commit using [Conventional Commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`)
+5. Open a Pull Request and reference the related issue
