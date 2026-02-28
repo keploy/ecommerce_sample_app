@@ -38,12 +38,12 @@ func NewSafeProducer(brokers []string, topic string, timeout time.Duration) *Saf
 		topic:   topic,
 	}
 
-	// Check if we're in Keploy test mode
+	// Check if we're in Keploy test mode (replay)
+	// During test mode, we skip Kafka initialization since mocks will be replayed
+	// During record mode, we need to connect to Kafka to capture the traffic
 	keployMode := os.Getenv("KEPLOY_MODE")
-	keployTestID := os.Getenv("KEPLOY_TEST_ID")
-	keployTestRun := os.Getenv("KEPLOY_TEST_RUN")
 	
-	isTestMode := keployMode == "test" || keployTestID != "" || keployTestRun != ""
+	isTestMode := keployMode == "test"
 	
 	if isTestMode {
 		log.Printf("Kafka SafeProducer: Keploy test mode detected (KEPLOY_MODE=%s), skipping producer initialization", keployMode)
@@ -155,13 +155,11 @@ func (sp *SafeProducer) Close() error {
 
 	// Skip close in Keploy test mode to avoid unmocked requests
 	keployMode := os.Getenv("KEPLOY_MODE")
-	keployTestID := os.Getenv("KEPLOY_TEST_ID")
-	keployTestRun := os.Getenv("KEPLOY_TEST_RUN")
 	
-	isTestMode := keployMode != "" || keployTestID != "" || keployTestRun != ""
+	isTestMode := keployMode == "test"
 	
-	log.Printf("Kafka SafeProducer: Close() called - KEPLOY_MODE=%s, KEPLOY_TEST_ID=%s, KEPLOY_TEST_RUN=%s, isTestMode=%v",
-		keployMode, keployTestID, keployTestRun, isTestMode)
+	log.Printf("Kafka SafeProducer: Close() called - KEPLOY_MODE=%s, isTestMode=%v",
+		keployMode, isTestMode)
 	
 	if isTestMode {
 		log.Println("Kafka SafeProducer: skipping close in Keploy test mode")
