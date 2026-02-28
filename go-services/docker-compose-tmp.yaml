@@ -234,7 +234,7 @@ services:
             - ./apigateway/coverage:/svc_coverage
     keploy-agent:
         image: docker.io/keploy/enterprise:v3-dev
-        container_name: keploy-v3-2673
+        container_name: keploy-v3-090f
         # These capabilities are scoped to the container's own isolated network namespace
         # and do NOT grant access to the host's network, interfaces, or firewall.
         # The container runs in its own network namespace — no host access is possible.
@@ -248,7 +248,7 @@ services:
             - BINARY_TO_DOCKER=true
             - CERT_EXPORT_PATH=/tmp/keploy-tls
         ports:
-            - "39763:39763"
+            - "43951:43951"
             - "16789:16789"
             - "8080:8080"
         networks:
@@ -262,21 +262,21 @@ services:
             - keploy-tls-certs:/tmp/keploy-tls
         command:
             - --port
-            - "39763"
+            - "43951"
             - --proxy-port
             - "16789"
             - --dns-port
             - "26789"
             - --client-pid
-            - "302308"
+            - "701430"
             - --mode
             - test
             - --is-docker
             - --enable-testing
             - --config-path
-            - /home/yogesh/projects/ecommerce_sample_app/go-services
+            - /home/yogesh/projects3/ecommerce_sample_app/go-services
             - --build-delay
-            - "30"
+            - "90"
         healthcheck:
             test:
                 - CMD-SHELL

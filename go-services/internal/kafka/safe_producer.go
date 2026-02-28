@@ -3,7 +3,6 @@ package kafka
 import (
 	"context"
 	"log"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,19 +37,6 @@ func NewSafeProducer(brokers []string, topic string, timeout time.Duration) *Saf
 		topic:   topic,
 	}
 
-	// Check if we're in Keploy test mode (replay)
-	// During test mode, we skip Kafka initialization since mocks will be replayed
-	// During record mode, we need to connect to Kafka to capture the traffic
-	keployMode := os.Getenv("KEPLOY_MODE")
-	
-	isTestMode := keployMode == "test"
-	
-	if isTestMode {
-		log.Printf("Kafka SafeProducer: Keploy test mode detected (KEPLOY_MODE=%s), skipping producer initialization", keployMode)
-		log.Println("Kafka SafeProducer: operating in test mode - all events will be logged but not sent to Kafka")
-		return sp
-	}
-
 	log.Printf("Kafka SafeProducer: attempting to connect to brokers: %v, topic: %s (timeout: %v)", brokers, topic, timeout)
 
 	// Try to connect with timeout
@@ -81,7 +67,11 @@ func NewSafeProducer(brokers []string, topic string, timeout time.Duration) *Saf
 			log.Printf("Kafka SafeProducer: connection failed: %v, operating in degraded mode", initErr)
 		}
 	case <-ctx.Done():
-		log.Println("Kafka SafeProducer: connection timeout, operating in degraded mode (events will be logged but not sent)")
+		log.Println("Kafka SafeProducer: connection timeout, but will still attempt to send messages (Keploy may intercept)")
+		// In test mode, Keploy intercepts the connection, so we should still try to send
+		// Create the producer anyway - if Keploy is active, it will intercept the traffic
+		sp.producer = NewProducer(brokers, topic)
+		sp.connected.Store(true)
 	}
 
 	return sp
@@ -148,24 +138,9 @@ func (sp *SafeProducer) IsConnected() bool {
 
 // Close closes the Kafka producer connection.
 // It's safe to call Close multiple times or on a nil producer.
-// In Keploy test mode, it skips the actual close to avoid unmocked requests.
 func (sp *SafeProducer) Close() error {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
-
-	// Skip close in Keploy test mode to avoid unmocked requests
-	keployMode := os.Getenv("KEPLOY_MODE")
-	
-	isTestMode := keployMode == "test"
-	
-	log.Printf("Kafka SafeProducer: Close() called - KEPLOY_MODE=%s, isTestMode=%v",
-		keployMode, isTestMode)
-	
-	if isTestMode {
-		log.Println("Kafka SafeProducer: skipping close in Keploy test mode")
-		sp.connected.Store(false)
-		return nil
-	}
 
 	if sp.producer != nil {
 		log.Println("Kafka SafeProducer: closing connection")
