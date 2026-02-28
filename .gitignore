@@ -51,3 +51,4 @@ docker-compose-keploy.yml
 # Go workspace (if not needed)
 go.work
 go.work.sum
+go-services/keploy-enterprise
