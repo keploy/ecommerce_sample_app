@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -29,6 +31,9 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
+			fmt.Println("built with 1.24 current time is", time.Now())
+			fmt.Println("expiry time is", token.Claims.(jwt.MapClaims)["exp"])
+			time.Sleep(30 * time.Second)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			c.Abort()
 			return

@@ -40,7 +40,6 @@ func main() {
 
 	cfg = config.Load()
 	cfg.DBName = "order_db"
-	cfg.Port = 8080
 
 	database = db.MustConnect(cfg.DBHost, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 	defer database.Close()
@@ -556,7 +555,7 @@ func handleCancelOrder(c *gin.Context) {
 	}
 
 	if order.Status == "CANCELLED" {
-		c.JSON(http.StatusOK, gin.H{"status": "CANCELLED"})
+		c.JSON(http.StatusOK, gin.H{"id": orderID, "status": "CANCELLED"})
 		return
 	}
 	if order.Status == "PAID" {

@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -10,7 +11,11 @@ import (
 
 // Connect creates a MySQL connection with retry logic
 func Connect(host, user, password, dbName string, retries int, delay time.Duration) (*sqlx.DB, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?parseTime=true", user, password, host, dbName)
+	port := "3306"
+	if p := os.Getenv("DB_PORT"); p != "" {
+		port = p
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, password, host, port, dbName)
 
 	var db *sqlx.DB
 	var lastErr error

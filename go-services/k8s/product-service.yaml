@@ -39,5 +39,7 @@ spec:
           value: "8081"
         - name: JWT_SECRET
           value: "dev-secret-change-me"
+        - name: JWT_TTL_SECONDS
+          value: "604800"
         ports:
         - containerPort: 8081
