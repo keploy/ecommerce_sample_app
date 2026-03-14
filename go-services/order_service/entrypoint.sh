@@ -29,6 +29,11 @@ fi
 # Print environment for debugging
 echo "Environment: KEPLOY_MODE=${KEPLOY_MODE:-not set}, KEPLOY_TEST_ID=${KEPLOY_TEST_ID:-not set}, KEPLOY_TEST_RUN=${KEPLOY_TEST_RUN:-not set}"
 
-exec ./order-service
+for candidate in "${ORDER_SERVICE_BIN:-}" "/order-service" "/app/order-service" "./order-service"; do
+  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+    exec "$candidate"
+  fi
+done
 
-
+echo "❌ order_service binary not found. Checked: ${ORDER_SERVICE_BIN:-<unset>}, /order-service, /app/order-service, ./order-service"
+exit 127
