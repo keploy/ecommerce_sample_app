@@ -18,7 +18,9 @@ buildDelay: 90
 test:
     selectedTests: {}
     globalNoise:
-        global: {}
+        global:
+            body:
+                "id": []
         test-sets: {}
     delay: 90
     host: ""
