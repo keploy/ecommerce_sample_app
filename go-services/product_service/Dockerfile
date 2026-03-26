@@ -13,9 +13,9 @@ COPY . .
 RUN go build -o /product-service ./product_service
 
 # Runtime
-FROM alpine:3.19
+FROM alpine:3.21
 
-RUN apk --no-cache add ca-certificates
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 WORKDIR /app
 COPY --from=builder /product-service .
