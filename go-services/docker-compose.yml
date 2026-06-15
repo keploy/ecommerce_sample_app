@@ -14,10 +14,19 @@ services:
     volumes:
       - ./user_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      # TCP+creds probe: only the fully-started real server on :3306 answers.
+      # The old `ping -h localhost` hit MySQL 8.0's socket-only TEMPORARY init
+      # server and passed on exit-code-only (even "Access denied"), so the
+      # container was marked healthy ~3s before the real :3306 listener was up.
+      # A dependent service connecting over TCP then started too early and
+      # failed during the temp-server -> real-server restart gap (intermittent
+      # "container unhealthy" / "dependency failed to start" in CI).
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "3306", "-uroot", "-proot" ]
       interval: 5s
       timeout: 5s
       retries: 20
+      # Cold init (slow under CI contention) shouldn't burn the retry budget.
+      start_period: 60s
 
   mysql-products:
     image: mysql:8.0
@@ -34,10 +43,19 @@ services:
     volumes:
       - ./product_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      # TCP+creds probe: only the fully-started real server on :3306 answers.
+      # The old `ping -h localhost` hit MySQL 8.0's socket-only TEMPORARY init
+      # server and passed on exit-code-only (even "Access denied"), so the
+      # container was marked healthy ~3s before the real :3306 listener was up.
+      # A dependent service connecting over TCP then started too early and
+      # failed during the temp-server -> real-server restart gap (intermittent
+      # "container unhealthy" / "dependency failed to start" in CI).
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "3306", "-uroot", "-proot" ]
       interval: 5s
       timeout: 5s
       retries: 20
+      # Cold init (slow under CI contention) shouldn't burn the retry budget.
+      start_period: 60s
 
   mysql-orders:
     image: mysql:8.0
@@ -54,10 +72,19 @@ services:
     volumes:
       - ./order_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      # TCP+creds probe: only the fully-started real server on :3306 answers.
+      # The old `ping -h localhost` hit MySQL 8.0's socket-only TEMPORARY init
+      # server and passed on exit-code-only (even "Access denied"), so the
+      # container was marked healthy ~3s before the real :3306 listener was up.
+      # A dependent service connecting over TCP then started too early and
+      # failed during the temp-server -> real-server restart gap (intermittent
+      # "container unhealthy" / "dependency failed to start" in CI).
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "3306", "-uroot", "-proot" ]
       interval: 5s
       timeout: 5s
       retries: 20
+      # Cold init (slow under CI contention) shouldn't burn the retry budget.
+      start_period: 60s
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
