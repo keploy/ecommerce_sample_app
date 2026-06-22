@@ -14,10 +14,16 @@ services:
     volumes:
       - ./user_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      # -h 127.0.0.1 forces a TCP check: during MySQL's init phase the server
+      # listens only on the unix socket (skip-networking), so `-h localhost`
+      # (socket) reports healthy before the network port is serving — dependents
+      # gated on service_healthy then start early and hit "connection refused".
+      # A TCP probe only passes once 3306 is actually accepting connections.
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
 
   mysql-products:
     image: mysql:8.0
@@ -34,10 +40,16 @@ services:
     volumes:
       - ./product_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      # -h 127.0.0.1 forces a TCP check: during MySQL's init phase the server
+      # listens only on the unix socket (skip-networking), so `-h localhost`
+      # (socket) reports healthy before the network port is serving — dependents
+      # gated on service_healthy then start early and hit "connection refused".
+      # A TCP probe only passes once 3306 is actually accepting connections.
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
 
   mysql-orders:
     image: mysql:8.0
@@ -54,10 +66,16 @@ services:
     volumes:
       - ./order_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      # -h 127.0.0.1 forces a TCP check: during MySQL's init phase the server
+      # listens only on the unix socket (skip-networking), so `-h localhost`
+      # (socket) reports healthy before the network port is serving — dependents
+      # gated on service_healthy then start early and hit "connection refused".
+      # A TCP probe only passes once 3306 is actually accepting connections.
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
