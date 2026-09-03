@@ -1,7 +1,6 @@
 services:
   mysql-users:
     image: mysql:8.0
-    container_name: mysql-users
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -10,7 +9,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3307:3306"
+      - "${MYSQL_USERS_PORT:-3307}:3306"
     volumes:
       - ./user_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
@@ -27,7 +26,6 @@ services:
 
   mysql-products:
     image: mysql:8.0
-    container_name: mysql-products
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -36,7 +34,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3308:3306"
+      - "${MYSQL_PRODUCTS_PORT:-3308}:3306"
     volumes:
       - ./product_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
@@ -53,7 +51,6 @@ services:
 
   mysql-orders:
     image: mysql:8.0
-    container_name: mysql-orders
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -62,7 +59,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3309:3306"
+      - "${MYSQL_ORDERS_PORT:-3309}:3306"
     volumes:
       - ./order_service/db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
@@ -79,14 +76,13 @@ services:
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: zookeeper
     restart: "no"
     stop_grace_period: 20s
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - "2181:2181"
+      - "${ZOOKEEPER_PORT:-2181}:2181"
     healthcheck:
       test: [ "CMD", "nc", "-z", "localhost", "2181" ]
       interval: 5s
@@ -95,7 +91,6 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: kafka
     restart: "no"
     stop_grace_period: 20s
     depends_on:
@@ -110,7 +105,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     ports:
-      - "29092:29092"
+      - "${KAFKA_PORT:-29092}:29092"
     healthcheck:
       test: [ "CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list" ]
       interval: 10s
@@ -119,7 +114,6 @@ services:
 
   kafka-init:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: kafka-init
     depends_on:
       kafka:
         condition: service_healthy
@@ -143,7 +137,6 @@ services:
     build:
       context: .
       dockerfile: ./user_service/Dockerfile
-    container_name: user_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -162,7 +155,7 @@ services:
       mysql-users:
         condition: service_healthy
     ports:
-      - "8082:8082"
+      - "${USER_SERVICE_PORT:-8082}:8082"
     volumes:
       - ./coverage:/coverage
       - ./user_service/coverage:/svc_coverage
@@ -171,7 +164,6 @@ services:
     build:
       context: .
       dockerfile: ./product_service/Dockerfile
-    container_name: product_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -185,7 +177,7 @@ services:
       mysql-products:
         condition: service_healthy
     ports:
-      - "8081:8081"
+      - "${PRODUCT_SERVICE_PORT:-8081}:8081"
     volumes:
       - ./coverage:/coverage
       - ./product_service/coverage:/svc_coverage
@@ -194,7 +186,6 @@ services:
     build:
       context: .
       dockerfile: ./order_service/Dockerfile
-    container_name: order_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -221,7 +212,7 @@ services:
       kafka-init:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "${ORDER_SERVICE_PORT:-8080}:8080"
     volumes:
       - ./coverage:/coverage
       - ./order_service/coverage:/svc_coverage
@@ -230,7 +221,6 @@ services:
     build:
       context: .
       dockerfile: ./apigateway/Dockerfile
-    container_name: apigateway
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -247,7 +237,7 @@ services:
       order_service:
         condition: service_started
     ports:
-      - "8083:8083"
+      - "${APIGATEWAY_PORT:-8083}:8083"
     volumes:
       - ./coverage:/coverage
       - ./apigateway/coverage:/svc_coverage
