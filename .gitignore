@@ -52,3 +52,6 @@ docker-compose-keploy.yml
 go.work
 go.work.sum
 go-services/keploy-enterprise
+
+# keploy writes this next to the compose file it rewrites
+docker-compose-tmp.yaml
