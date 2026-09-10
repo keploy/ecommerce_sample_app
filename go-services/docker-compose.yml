@@ -1,3 +1,72 @@
+# Shared by the three MySQL services below, stated once rather than triplicated.
+#
+# NOTE: compose merges this mapping key-by-key, not recursively. A service that
+# declares its own `healthcheck:` replaces THIS BLOCK'S `healthcheck` wholesale,
+# so the interval/retries/start_period below vanish silently along with the
+# test it overrode. The same trap applies to `command:` and `tmpfs:`.
+x-mysql-common: &mysql-common
+  # Keep the datadir in RAM.
+  #
+  # mysql:8.0 declares VOLUME /var/lib/mysql and this file names no volume for
+  # it, so before this change every container got a fresh ANONYMOUS volume and
+  # every `compose up` paid a full cold `mysqld --initialize`. It is those
+  # fsyncs that collapse when several MySQLs initialise at once on a shared CI
+  # host -- which is exactly what the kafka-ecommerce lane does: two matrix axes
+  # x three services = six concurrent cold inits. Nothing here needs to outlive
+  # its container, so the disk round-trips buy nothing.
+  #
+  # Consequence worth knowing: the datadir now dies with the CONTAINER, not just
+  # with the volume, so a stop/start re-initialises and re-runs db.sql. CI is
+  # unaffected -- it tears the whole project down between the record and replay
+  # phases, so both already started from a virgin DB -- but a local
+  # `compose stop && compose start` no longer preserves rows.
+  tmpfs:
+    - /var/lib/mysql:size=1g
+  # Binary logging buys nothing here -- no replication, no point-in-time
+  # recovery -- and it roughly halves how fast the datadir grows under writes,
+  # which is what keeps the cap above comfortable. It saves almost nothing at
+  # rest; the point is the growth rate, not the baseline.
+  #
+  # Deliberately NOT also shrinking innodb_redo_log_capacity. It would free real
+  # RAM per container, but the redo log is preallocated, so on tmpfs it costs no
+  # init time to keep -- and capping it low makes InnoDB block writer threads
+  # with "MY-014084 ... unable to reserve space in redo log". That trades a new
+  # stall mode for RAM nothing here is short of.
+  #
+  # Know the failure mode at the size= cap above: MySQL does NOT exit on a full
+  # datadir. It logs "Disk is full ... waiting for someone to free space",
+  # retries every 60s, reprints only every 600s, and the healthcheck keeps
+  # reporting healthy throughout -- so a run that hits it hangs to the pipeline
+  # timeout with almost nothing pointing at the cause. Keep the cap well above
+  # the real footprint rather than trimming it close.
+  command: --skip-log-bin
+  healthcheck:
+    # -h 127.0.0.1 forces a TCP check: during MySQL's init phase the server
+    # listens only on the unix socket (skip-networking), so `-h localhost`
+    # (socket) reports healthy before the network port is serving -- dependents
+    # gated on service_healthy then start early and hit "connection refused".
+    # A TCP probe only passes once 3306 is actually accepting connections.
+    test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
+    interval: 5s
+    timeout: 5s
+    retries: 20
+    # start_period must cover a FIRST-RUN init end to end, because the probe
+    # above cannot pass during any of it: the entrypoint initialises the data
+    # directory, starts a socket-only temporary server, seeds db.sql, then stops
+    # it -- 3306 is not accepting TCP that whole time. retries/interval are the
+    # wrong knob, since they bound failures AFTER a service was once ready and
+    # padding them would also slow detection of a MySQL that dies mid-test.
+    #
+    # Deliberately left at 60s. The cold-init contention that made 60s too tight
+    # is what the tmpfs datadir above removes, so raising it as well would mean
+    # a green run could no longer tell you which change fixed the lane. It also
+    # costs diagnosability: time-to-unhealthy is start_period + retries*interval
+    # (160s here), and the CI script waits 240s before giving up -- widening
+    # this narrows that margin until the script's generic "failed to start"
+    # fires before compose's precise "dependency failed to start: ... is
+    # unhealthy". If the lane still flakes, raise it then, with evidence.
+    start_period: 60s
+
 services:
   mysql-users:
     image: mysql:8.0
@@ -12,17 +81,7 @@ services:
       - "${MYSQL_USERS_PORT:-3307}:3306"
     volumes:
       - ./user_service/db.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      # -h 127.0.0.1 forces a TCP check: during MySQL's init phase the server
-      # listens only on the unix socket (skip-networking), so `-h localhost`
-      # (socket) reports healthy before the network port is serving — dependents
-      # gated on service_healthy then start early and hit "connection refused".
-      # A TCP probe only passes once 3306 is actually accepting connections.
-      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 60s
+    <<: *mysql-common
 
   mysql-products:
     image: mysql:8.0
@@ -37,17 +96,7 @@ services:
       - "${MYSQL_PRODUCTS_PORT:-3308}:3306"
     volumes:
       - ./product_service/db.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      # -h 127.0.0.1 forces a TCP check: during MySQL's init phase the server
-      # listens only on the unix socket (skip-networking), so `-h localhost`
-      # (socket) reports healthy before the network port is serving — dependents
-      # gated on service_healthy then start early and hit "connection refused".
-      # A TCP probe only passes once 3306 is actually accepting connections.
-      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 60s
+    <<: *mysql-common
 
   mysql-orders:
     image: mysql:8.0
@@ -62,17 +111,7 @@ services:
       - "${MYSQL_ORDERS_PORT:-3309}:3306"
     volumes:
       - ./order_service/db.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      # -h 127.0.0.1 forces a TCP check: during MySQL's init phase the server
-      # listens only on the unix socket (skip-networking), so `-h localhost`
-      # (socket) reports healthy before the network port is serving — dependents
-      # gated on service_healthy then start early and hit "connection refused".
-      # A TCP probe only passes once 3306 is actually accepting connections.
-      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 60s
+    <<: *mysql-common
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
