@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-users-init
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS user_db;
+    USE user_db;
+
+    CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(36) PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        phone VARCHAR(32) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_users_username (username),
+        UNIQUE KEY uq_users_email (email)
+    );
+
+    CREATE TABLE IF NOT EXISTS addresses (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        line1 VARCHAR(255) NOT NULL,
+        line2 VARCHAR(255) NULL,
+        city VARCHAR(100) NOT NULL,
+        state VARCHAR(100) NOT NULL,
+        postal_code VARCHAR(20) NOT NULL,
+        country VARCHAR(2) NOT NULL,
+        phone VARCHAR(32) NULL,
+        is_default TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        INDEX idx_addr_user (user_id)
+    );
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-users
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+  selector:
+    app: mysql-users
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-users
+spec:
+  selector:
+    matchLabels:
+      app: mysql-users
+  template:
+    metadata:
+      labels:
+        app: mysql-users
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        volumeMounts:
+        - name: init-script
+          mountPath: /docker-entrypoint-initdb.d
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "root"
+        - name: MYSQL_DATABASE
+          value: "user_db"
+        - name: MYSQL_USER
+          value: "user"
+        - name: MYSQL_PASSWORD
+          value: "password"
+        ports:
+        - containerPort: 3306
+        livenessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-P", "3306", "-u", "root", "-proot"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-P", "3306", "-u", "root", "-proot"]
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 5
+      volumes:
+      - name: init-script
+        configMap:
+          name: mysql-users-init

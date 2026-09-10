@@ -3,7 +3,6 @@ version: "3.9"
 services:
   mysql-users:
     image: mysql:8.0
-    container_name: mysql-users
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -12,7 +11,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3307:3306"
+      - "${MYSQL_USERS_PORT:-3307}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -21,7 +20,6 @@ services:
 
   mysql-products:
     image: mysql:8.0
-    container_name: mysql-products
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -30,7 +28,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3308:3306"
+      - "${MYSQL_PRODUCTS_PORT:-3308}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -39,7 +37,6 @@ services:
 
   mysql-orders:
     image: mysql:8.0
-    container_name: mysql-orders
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -48,7 +45,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3309:3306"
+      - "${MYSQL_ORDERS_PORT:-3309}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -57,7 +54,6 @@ services:
 
   localstack:
     image: localstack/localstack:3.3
-    container_name: localstack
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -65,14 +61,13 @@ services:
       DEBUG: "1"
       AWS_DEFAULT_REGION: us-east-1
     ports:
-      - "4566:4566"
+      - "${LOCALSTACK_PORT:-4566}:4566"
     volumes:
       - ./localstack:/etc/localstack/init/ready.d
       - /var/run/docker.sock:/var/run/docker.sock
 
   user_service:
     build: ./user_service
-    container_name: user_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -90,14 +85,13 @@ services:
       mysql-users:
         condition: service_healthy
     ports:
-      - "8082:8082"
+      - "${USER_SERVICE_PORT:-8082}:8082"
     volumes:
       - ./coverage:/coverage
       - ./user_service/coverage:/svc_coverage
 
   product_service:
     build: ./product_service
-    container_name: product_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -111,14 +105,13 @@ services:
       mysql-products:
         condition: service_healthy
     ports:
-      - "8081:8081"
+      - "${PRODUCT_SERVICE_PORT:-8081}:8081"
     volumes:
       - ./coverage:/coverage
       - ./product_service/coverage:/svc_coverage
 
   order_service:
     build: ./order_service
-    container_name: order_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -145,14 +138,13 @@ services:
       localstack:
         condition: service_started
     ports:
-      - "8080:8080"
+      - "${ORDER_SERVICE_PORT:-8080}:8080"
     volumes:
       - ./coverage:/coverage
       - ./order_service/coverage:/svc_coverage
 
   apigateway:
     build: ./apigateway
-    container_name: apigateway
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -169,7 +161,7 @@ services:
       order_service:
         condition: service_started
     ports:
-      - "8083:8083"
+      - "${KEPLOY_EXTRA_PORT:-8083}:8083"
     volumes:
       - ./coverage:/coverage
       - ./apigateway/coverage:/svc_coverage
