@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .coverage
+coverage/
 
 # Envs
 .env
@@ -12,3 +13,45 @@ venv/
 
 # OS
 .DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+keploy-logs.txt
+
+# Compiled binaries (specific paths to avoid ignoring directories)
+go-services/order_service/order_service
+go-services/order_service/order_service_bin
+go-services/order_service/order_service_test
+go-services/product_service/product_service
+go-services/product_service/product_service_bin
+go-services/product_service/product_service_test
+go-services/user_service/user_service
+go-services/user_service/user_service_bin
+go-services/user_service/user_service_test
+
+# Backup files
+*.bak
+
+# Analysis/Summary files
+FINAL_FIX_SUMMARY.md
+KAFKA_MOCK_FIX_USAGE.md
+
+# Keploy test sets (keep keploy.yml configs only)
+**/keploy/test-set-*/
+**/keploy/dedup/
+**/keploy/freezeTime/
+
+# Docker compose variants
+docker-compose-keploy.yml
+
+# Go workspace (if not needed)
+go.work
+go.work.sum
+go-services/keploy-enterprise
+
+# keploy writes this next to the compose file it rewrites
+docker-compose-tmp.yaml

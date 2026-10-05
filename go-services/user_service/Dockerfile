@@ -1,0 +1,26 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source
+COPY . .
+
+# Build
+RUN go build -o /user-service ./user_service
+
+# Runtime
+FROM alpine:3.21
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+WORKDIR /app
+COPY --from=builder /user-service .
+
+EXPOSE 8082
+
+CMD ["./user-service"]
+

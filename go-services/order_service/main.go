@@ -1,0 +1,706 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	_ "github.com/keploy/go-sdk/v3/keploy"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+
+	"github.com/keploy/ecommerce-sample-go/internal/config"
+	"github.com/keploy/ecommerce-sample-go/internal/db"
+	"github.com/keploy/ecommerce-sample-go/internal/kafka"
+	"github.com/keploy/ecommerce-sample-go/internal/middleware"
+)
+
+var (
+	cfg             *config.Config
+	database        *sqlx.DB
+	kafkaProducer   *kafka.SafeProducer
+	kafkaConsumer   *kafka.SafeConsumer
+	serverStartTime time.Time
+)
+
+func main() {
+	serverStartTime = time.Now()
+
+	cfg = config.Load()
+	cfg.DBName = "order_db"
+
+	database = db.MustConnect(cfg.DBHost, cfg.DBUser, cfg.DBPassword, cfg.DBName)
+	defer database.Close()
+
+	// Initialize Kafka producer
+	initKafka()
+	defer closeKafka()
+
+	// Start Kafka consumer for event logging
+	startKafkaConsumer()
+	defer closeKafkaConsumer()
+
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+
+	api := r.Group("/api/v1")
+	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	{
+		api.POST("/orders", handleCreateOrder)
+		api.GET("/orders", handleListOrders)
+		api.GET("/orders/:id", handleGetOrder)
+		api.GET("/orders/:id/details", handleGetOrderDetails)
+		api.POST("/orders/:id/cancel", handleCancelOrder)
+		api.POST("/orders/:id/pay", handlePayOrder)
+
+		// Dynamic data endpoints for testing
+		api.GET("/health", handleHealth)
+		api.GET("/stats", handleStats)
+	}
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Handler: r,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	srv.Shutdown(ctx)
+}
+
+// isKeployMode detects if the service is running in Keploy test mode
+func isKeployMode() bool {
+	return os.Getenv("KEPLOY_MODE") != "" ||
+		os.Getenv("KEPLOY_TEST_ID") != "" ||
+		os.Getenv("KEPLOY_TEST_RUN") != ""
+}
+
+// getKafkaTimeout returns the appropriate timeout for Kafka initialization
+// based on the current environment
+func getKafkaTimeout() time.Duration {
+	// During Keploy test replay, use a short timeout since Kafka is mocked
+	// During recording, use a longer timeout to ensure Kafka is ready
+	if os.Getenv("KEPLOY_MODE") == "test" {
+		return 5 * time.Second // Short timeout during test replay
+	}
+	if isKeployMode() {
+		return 60 * time.Second // Long timeout during recording to capture mocks
+	}
+	return 5 * time.Second // Normal timeout in production
+}
+
+// initKafka initializes the Kafka producer with timeout-based connection
+func initKafka() {
+	timeout := getKafkaTimeout()
+	log.Printf("Initializing Kafka producer with brokers: %v, topic: %s, timeout: %v", cfg.KafkaBrokers, cfg.KafkaTopic, timeout)
+	kafkaProducer = kafka.NewSafeProducer(cfg.KafkaBrokers, cfg.KafkaTopic, timeout)
+	log.Println("Kafka producer initialization complete")
+}
+
+// closeKafka closes the Kafka producer connection
+func closeKafka() {
+	if kafkaProducer != nil {
+		if err := kafkaProducer.Close(); err != nil {
+			log.Printf("Error closing Kafka producer: %v", err)
+		}
+	}
+}
+
+// startKafkaConsumer starts a background consumer to log events
+func startKafkaConsumer() {
+	// Check if running in Keploy test mode
+	keployTestMode := os.Getenv("KEPLOY_MODE") == "test"
+	log.Printf("Kafka consumer: initializing ... keployTestMode: %v", keployTestMode)
+	
+	// Skip consumer in test mode to avoid infinite retry loops
+	if keployTestMode {
+		log.Println("⚠️  Keploy test mode detected. Skipping Kafka consumer startup.")
+		log.Println("    Consumer group operations (JoinGroup, SyncGroup, Heartbeat) will not be attempted.")
+		return
+	}
+	
+	timeout := getKafkaTimeout()
+	log.Printf("Initializing Kafka consumer for topic: %s, group: %s, timeout: %v", cfg.KafkaTopic, cfg.KafkaGroupID, timeout)
+	kafkaConsumer = kafka.NewSafeConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID)
+
+	ctx := context.Background()
+	log.Println("Starting background Kafka consumer asynchronously...")
+	kafkaConsumer.StartAsync(ctx, func(ctx context.Context, eventType string, payload map[string]interface{}) error {
+		log.Printf(">>> KAFKA EVENT RECEIVED: [%s] -> %v", eventType, payload)
+		return nil
+	}, timeout)
+}
+
+// closeKafkaConsumer closes the Kafka consumer connection
+func closeKafkaConsumer() {
+	if kafkaConsumer != nil {
+		if err := kafkaConsumer.Close(); err != nil {
+			log.Printf("Error closing Kafka consumer: %v", err)
+		}
+	}
+}
+
+// emitEvent sends an event to Kafka
+func emitEvent(eventType string, payload map[string]interface{}) {
+	if kafkaProducer == nil {
+		return
+	}
+
+	// Clone payload to avoid modifying the original
+	kafkaPayload := make(map[string]interface{})
+	for k, v := range payload {
+		kafkaPayload[k] = v
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := kafkaProducer.SendEvent(ctx, eventType, kafkaPayload); err != nil {
+		log.Printf("Failed to send Kafka message: %v", err)
+	}
+}
+
+// HTTP client helpers
+func httpClient() *http.Client {
+	return &http.Client{Timeout: 10 * time.Second}
+}
+
+func fwdAuthHeaders(c *gin.Context) map[string]string {
+	headers := make(map[string]string)
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		headers["Authorization"] = auth
+	}
+	return headers
+}
+
+func doRequest(method, url string, body interface{}, headers map[string]string) (*http.Response, []byte, error) {
+	var reqBody io.Reader
+	if body != nil {
+		data, _ := json.Marshal(body)
+		reqBody = bytes.NewBuffer(data)
+	}
+
+	req, _ := http.NewRequest(method, url, reqBody)
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := httpClient().Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	return resp, respBody, nil
+}
+
+// ===================== HANDLERS =====================
+
+type OrderItem struct {
+	ProductID string  `json:"productId"`
+	Quantity  int     `json:"quantity"`
+	Price     float64 `json:"price,omitempty"`
+}
+
+type CreateOrderRequest struct {
+	UserID            string      `json:"userId" binding:"required"`
+	Items             []OrderItem `json:"items" binding:"required"`
+	ShippingAddressID string      `json:"shippingAddressId"`
+}
+
+func handleCreateOrder(c *gin.Context) {
+	var req CreateOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required fields"})
+		return
+	}
+
+	if len(req.Items) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "items must be a non-empty array"})
+		return
+	}
+
+	headers := fwdAuthHeaders(c)
+	idmpKey := c.GetHeader("Idempotency-Key")
+
+	// Validate user
+	resp, _, err := doRequest("GET", cfg.UserServiceURL+"/users/"+req.UserID, nil, headers)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": fmt.Sprintf("Could not connect to User Service: %v", err)})
+		return
+	}
+	if resp.StatusCode != 200 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	// Validate shipping address
+	shippingAddressID := req.ShippingAddressID
+	if shippingAddressID != "" {
+		resp, body, _ := doRequest("GET", cfg.UserServiceURL+"/users/"+req.UserID+"/addresses", nil, headers)
+		if resp.StatusCode == 200 {
+			var addresses []map[string]interface{}
+			json.Unmarshal(body, &addresses)
+			found := false
+			for _, addr := range addresses {
+				if addr["id"] == shippingAddressID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "shippingAddressId does not belong to user"})
+				return
+			}
+		}
+	} else {
+		// Pick default address
+		resp, body, _ := doRequest("GET", cfg.UserServiceURL+"/users/"+req.UserID+"/addresses", nil, headers)
+		if resp.StatusCode == 200 {
+			var addresses []map[string]interface{}
+			json.Unmarshal(body, &addresses)
+			if len(addresses) > 0 {
+				if id, ok := addresses[0]["id"].(string); ok {
+					shippingAddressID = id
+				}
+			}
+		}
+	}
+
+	// Validate products and calculate total
+	var totalAmount float64
+	for i := range req.Items {
+		item := &req.Items[i]
+		if item.Quantity <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "quantity must be > 0"})
+			return
+		}
+
+		resp, body, err := doRequest("GET", cfg.ProductServiceURL+"/products/"+item.ProductID, nil, headers)
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": fmt.Sprintf("Could not connect to Product Service: %v", err)})
+			return
+		}
+		if resp.StatusCode != 200 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Product with ID %s not found", item.ProductID)})
+			return
+		}
+
+		var product map[string]interface{}
+		json.Unmarshal(body, &product)
+
+		stock := int(product["stock"].(float64))
+		if stock < item.Quantity {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Not enough stock for product %s", product["name"])})
+			return
+		}
+
+		item.Price = product["price"].(float64)
+		totalAmount += item.Price * float64(item.Quantity)
+	}
+
+	// Reserve stock
+	var reserved []OrderItem
+	for _, item := range req.Items {
+		_, _, err := doRequest("POST", cfg.ProductServiceURL+"/products/"+item.ProductID+"/reserve",
+			map[string]int{"quantity": item.Quantity}, headers)
+		if err == nil {
+			reserved = append(reserved, item)
+		}
+	}
+
+	// Create order in DB
+	orderID := uuid.New().String()
+	tx, _ := database.Beginx()
+
+	var idmpKeyPtr *string
+	if idmpKey != "" {
+		idmpKeyPtr = &idmpKey
+	}
+	var shipAddrPtr *string
+	if shippingAddressID != "" {
+		shipAddrPtr = &shippingAddressID
+	}
+
+	_, err = tx.Exec(
+		"INSERT INTO orders (id, user_id, status, idempotency_key, total_amount, shipping_address_id) VALUES (?, ?, ?, ?, ?, ?)",
+		orderID, req.UserID, "PENDING", idmpKeyPtr, totalAmount, shipAddrPtr,
+	)
+	if err != nil {
+		tx.Rollback()
+		// Release reserved stock
+		for _, r := range reserved {
+			doRequest("POST", cfg.ProductServiceURL+"/products/"+r.ProductID+"/release",
+				map[string]int{"quantity": r.Quantity}, headers)
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create order: %v", err)})
+		return
+	}
+
+	for _, item := range req.Items {
+		tx.Exec(
+			"INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)",
+			orderID, item.ProductID, item.Quantity, item.Price,
+		)
+	}
+	tx.Commit()
+
+	// Emit event
+	emitEvent("order_created", map[string]interface{}{
+		"orderId":     orderID,
+		"userId":      req.UserID,
+		"totalAmount": totalAmount,
+		"items":       req.Items,
+	})
+
+	c.JSON(http.StatusCreated, gin.H{"id": orderID, "status": "PENDING"})
+}
+
+func handleListOrders(c *gin.Context) {
+	userID := c.Query("userId")
+	status := c.Query("status")
+	limitStr := c.DefaultQuery("limit", "20")
+	limit, _ := strconv.Atoi(limitStr)
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	var clauses []string
+	var params []interface{}
+
+	if userID != "" {
+		clauses = append(clauses, "user_id=?")
+		params = append(params, userID)
+	}
+	if status != "" {
+		clauses = append(clauses, "status=?")
+		params = append(params, status)
+	}
+
+	query := "SELECT id, user_id, status, total_amount, created_at FROM orders"
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query += " ORDER BY created_at DESC, id ASC LIMIT ?"
+	params = append(params, limit+1)
+
+	var orders []struct {
+		ID          string    `db:"id" json:"id"`
+		UserID      string    `db:"user_id" json:"user_id"`
+		Status      string    `db:"status" json:"status"`
+		TotalAmount float64   `db:"total_amount" json:"total_amount"`
+		CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	}
+	database.Select(&orders, query, params...)
+
+	c.JSON(http.StatusOK, gin.H{"orders": orders, "nextCursor": nil})
+}
+
+func handleGetOrder(c *gin.Context) {
+	orderID := c.Param("id")
+
+	var order struct {
+		ID                string    `db:"id" json:"id"`
+		UserID            string    `db:"user_id" json:"user_id"`
+		Status            string    `db:"status" json:"status"`
+		TotalAmount       float64   `db:"total_amount" json:"total_amount"`
+		ShippingAddressID *string   `db:"shipping_address_id" json:"shipping_address_id"`
+		CreatedAt         time.Time `db:"created_at" json:"created_at"`
+		UpdatedAt         time.Time `db:"updated_at" json:"updated_at"`
+	}
+
+	err := database.Get(&order, "SELECT id, user_id, status, total_amount, shipping_address_id, created_at, updated_at FROM orders WHERE id=?", orderID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+
+	var items []struct {
+		ProductID string  `db:"product_id" json:"product_id"`
+		Quantity  int     `db:"quantity" json:"quantity"`
+		Price     float64 `db:"price" json:"price"`
+	}
+	database.Select(&items, "SELECT product_id, quantity, price FROM order_items WHERE order_id=?", orderID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":                  order.ID,
+		"user_id":             order.UserID,
+		"status":              order.Status,
+		"total_amount":        order.TotalAmount,
+		"shipping_address_id": order.ShippingAddressID,
+		"created_at":          order.CreatedAt,
+		"updated_at":          order.UpdatedAt,
+		"items":               items,
+	})
+}
+
+func handleGetOrderDetails(c *gin.Context) {
+	orderID := c.Param("id")
+	headers := fwdAuthHeaders(c)
+
+	var order struct {
+		ID                string    `db:"id"`
+		UserID            string    `db:"user_id"`
+		Status            string    `db:"status"`
+		TotalAmount       float64   `db:"total_amount"`
+		ShippingAddressID *string   `db:"shipping_address_id"`
+		CreatedAt         time.Time `db:"created_at"`
+		UpdatedAt         time.Time `db:"updated_at"`
+	}
+
+	err := database.Get(&order, "SELECT id, user_id, status, total_amount, shipping_address_id, created_at, updated_at FROM orders WHERE id=?", orderID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+
+	var items []struct {
+		ProductID string `db:"product_id"`
+		Quantity  int    `db:"quantity"`
+	}
+	database.Select(&items, "SELECT product_id, quantity FROM order_items WHERE order_id=?", orderID)
+
+	// Fetch user details
+	var userObj map[string]interface{}
+	resp, body, _ := doRequest("GET", cfg.UserServiceURL+"/users/"+order.UserID, nil, headers)
+	if resp != nil && resp.StatusCode == 200 {
+		json.Unmarshal(body, &userObj)
+	}
+
+	// Fetch product details for each item
+	var enrichedItems []map[string]interface{}
+	for _, it := range items {
+		var productObj map[string]interface{}
+		resp, body, _ := doRequest("GET", cfg.ProductServiceURL+"/products/"+it.ProductID, nil, headers)
+		if resp != nil && resp.StatusCode == 200 {
+			json.Unmarshal(body, &productObj)
+		}
+		enrichedItems = append(enrichedItems, map[string]interface{}{
+			"productId": it.ProductID,
+			"quantity":  it.Quantity,
+			"product":   productObj,
+		})
+	}
+
+	// Fetch shipping address
+	var shippingAddr map[string]interface{}
+	resp, body, _ = doRequest("GET", cfg.UserServiceURL+"/users/"+order.UserID+"/addresses", nil, headers)
+	if resp != nil && resp.StatusCode == 200 {
+		var addresses []map[string]interface{}
+		json.Unmarshal(body, &addresses)
+		for _, addr := range addresses {
+			if order.ShippingAddressID != nil && addr["id"] == *order.ShippingAddressID {
+				shippingAddr = addr
+				break
+			}
+		}
+		if shippingAddr == nil && len(addresses) > 0 {
+			shippingAddr = addresses[0]
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":                order.ID,
+		"status":            order.Status,
+		"total_amount":      order.TotalAmount,
+		"created_at":        order.CreatedAt.Format(time.RFC3339),
+		"updated_at":        order.UpdatedAt.Format(time.RFC3339),
+		"userId":            order.UserID,
+		"shippingAddressId": order.ShippingAddressID,
+		"shippingAddress":   shippingAddr,
+		"user":              userObj,
+		"items":             enrichedItems,
+	})
+}
+
+func handleCancelOrder(c *gin.Context) {
+	orderID := c.Param("id")
+	headers := fwdAuthHeaders(c)
+
+	var order struct {
+		Status string `db:"status"`
+	}
+	err := database.Get(&order, "SELECT status FROM orders WHERE id=?", orderID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+
+	if order.Status == "CANCELLED" {
+		c.JSON(http.StatusOK, gin.H{"id": orderID, "status": "CANCELLED"})
+		return
+	}
+	if order.Status == "PAID" {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cannot cancel a paid order"})
+		return
+	}
+
+	// Release stock
+	var items []struct {
+		ProductID string `db:"product_id"`
+		Quantity  int    `db:"quantity"`
+	}
+	database.Select(&items, "SELECT product_id, quantity FROM order_items WHERE order_id=?", orderID)
+	for _, item := range items {
+		doRequest("POST", cfg.ProductServiceURL+"/products/"+item.ProductID+"/release",
+			map[string]int{"quantity": item.Quantity}, headers)
+	}
+
+	database.Exec("UPDATE orders SET status='CANCELLED' WHERE id=?", orderID)
+
+	emitEvent("order_cancelled", map[string]interface{}{"orderId": orderID})
+
+	c.JSON(http.StatusOK, gin.H{"id": orderID, "status": "CANCELLED"})
+}
+
+func handlePayOrder(c *gin.Context) {
+	orderID := c.Param("id")
+
+	var order struct {
+		Status      string  `db:"status"`
+		UserID      string  `db:"user_id"`
+		TotalAmount float64 `db:"total_amount"`
+	}
+	err := database.Get(&order, "SELECT status, user_id, total_amount FROM orders WHERE id=?", orderID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+
+	if order.Status == "CANCELLED" {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cannot pay a cancelled order"})
+		return
+	}
+	if order.Status == "PAID" {
+		c.JSON(http.StatusOK, gin.H{"id": orderID, "status": "PAID"})
+		return
+	}
+
+	database.Exec("UPDATE orders SET status='PAID' WHERE id=?", orderID)
+
+	emitEvent("order_paid", map[string]interface{}{
+		"orderId":     orderID,
+		"userId":      order.UserID,
+		"totalAmount": order.TotalAmount,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"id": orderID, "status": "PAID"})
+}
+
+// handleHealth returns service health with dynamic timestamp data
+func handleHealth(c *gin.Context) {
+	uptime := time.Since(serverStartTime)
+
+	// Check Kafka connection status
+	kafkaStatus := gin.H{
+		"producer": gin.H{
+			"connected": false,
+		},
+		"consumer": gin.H{
+			"connected": false,
+		},
+	}
+
+	if kafkaProducer != nil {
+		kafkaStatus["producer"] = gin.H{
+			"connected": kafkaProducer.IsConnected(),
+		}
+	}
+
+	if kafkaConsumer != nil {
+		kafkaStatus["consumer"] = gin.H{
+			"connected": kafkaConsumer.IsConnected(),
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":     "healthy",
+		"service":    "order-service",
+		"timestamp":  time.Now().UTC().Format(time.RFC3339Nano),
+		"serverTime": time.Now().Unix(),
+		"uptime": gin.H{
+			"seconds": int64(uptime.Seconds()),
+			"human":   uptime.String(),
+		},
+		"requestId": uuid.New().String(),
+		"version":   "1.0.0",
+		"environment": gin.H{
+			"dbHost":       cfg.DBHost,
+			"kafkaBrokers": cfg.KafkaBrokers,
+		},
+		"kafka": kafkaStatus,
+	})
+}
+
+// handleStats returns order statistics with dynamic data
+func handleStats(c *gin.Context) {
+	// Get total order count
+	var totalOrders int
+	database.Get(&totalOrders, "SELECT COUNT(*) FROM orders")
+
+	// Get count by status
+	type StatusCount struct {
+		Status string `db:"status"`
+		Count  int    `db:"count"`
+	}
+	var statusCounts []StatusCount
+	database.Select(&statusCounts, "SELECT status, COUNT(*) as count FROM orders GROUP BY status")
+
+	// Get recent order timestamps
+	type RecentOrder struct {
+		ID        string    `db:"id"`
+		CreatedAt time.Time `db:"created_at"`
+		Status    string    `db:"status"`
+		Total     float64   `db:"total_amount"`
+	}
+	var recentOrders []RecentOrder
+	database.Select(&recentOrders, "SELECT id, created_at, status, total_amount FROM orders ORDER BY created_at DESC LIMIT 5")
+
+	// Calculate total revenue
+	var totalRevenue float64
+	database.Get(&totalRevenue, "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'paid'")
+
+	c.JSON(http.StatusOK, gin.H{
+		"timestamp":    time.Now().UTC().Format(time.RFC3339Nano),
+		"requestId":    uuid.New().String(),
+		"generatedAt":  time.Now().Unix(),
+		"totalOrders":  totalOrders,
+		"totalRevenue": totalRevenue,
+		"statusCounts": statusCounts,
+		"recentOrders": recentOrders,
+		"serverUptime": time.Since(serverStartTime).String(),
+		"randomData": gin.H{
+			"uuid":      uuid.New().String(),
+			"timestamp": time.Now().UnixNano(),
+			"randomNum": time.Now().Nanosecond(),
+		},
+	})
+}

@@ -1,0 +1,299 @@
+# The three MySQL services below share one configuration, written out per service
+# rather than shared through a TOP-LEVEL anchor, and that is deliberate.
+#
+# keploy rewrites this file into a temporary compose before running it, and that
+# rewrite keeps exactly six top-level keys -- version, services, networks,
+# volumes, configs, secrets -- silently dropping every other one, `x-*` and
+# `name:` included. Services survives as a raw YAML node, so a `<<: *alias`
+# inside it is preserved verbatim while the `x-*` block that DEFINED the anchor
+# is gone, and the generated file fails to load with "unknown anchor". Keep
+# these blocks in sync by hand.
+#
+# An anchor declared INSIDE `services:` does survive that rewrite intact, so it
+# is a working alternative if this ever needs to be DRY. It is avoided here only
+# because it makes the three services share one node, and keploy mutates the
+# services tree -- a change aimed at one service would silently reach all three.
+#
+# WHY tmpfs: mysql:8.0 declares VOLUME /var/lib/mysql and this file names no
+# volume for it, so every container gets a fresh anonymous volume and every
+# `compose up` pays a full cold `mysqld --initialize`. It is those fsyncs that
+# collapse when several MySQLs initialise at once on a shared CI host -- keploy's
+# kafka-ecommerce lane runs two matrix axes x three services = six concurrent
+# cold inits, which is what blew the healthcheck budget. Nothing here needs to
+# outlive its container, so the disk round-trips buy nothing.
+#
+# Consequence: the datadir dies with the CONTAINER, not just the volume, so a
+# stop/start re-initialises and re-runs db.sql. CI already tears the project down
+# between record and replay, so both phases always started from a virgin DB.
+#
+# WHY the size cap: an unbounded Docker tmpfs may grow to 50% of host RAM, and
+# six of them could claim more than the host has. Know the failure mode AT the
+# cap: MySQL does not exit on a full datadir. It logs "Disk is full ... waiting",
+# retries every 60s, reprints only every 600s, and the healthcheck keeps
+# reporting healthy -- so a run that hits it hangs with little pointing at the
+# cause. Keep the cap well above the real footprint.
+#
+# WHY --skip-log-bin: no replication and no point-in-time recovery here, and
+# binary logging was roughly half the datadir's growth under writes, which is
+# what keeps the cap comfortable. Not also shrinking innodb_redo_log_capacity:
+# the redo log is preallocated so on tmpfs it costs no init time to keep, and
+# capping it low makes InnoDB block writer threads with "MY-014084 ... unable to
+# reserve space in redo log" -- a new stall mode traded for RAM nothing is short
+# of.
+#
+# WHY start_period stays 60s: tmpfs removes the contention that made 60s tight
+# (six concurrent inits now finish well inside it). Raising it too would mean a
+# green lane could not tell you which change fixed it, and time-to-unhealthy is
+# start_period + retries*interval -- widening it narrows the margin under the CI
+# script's own 240s wait until its generic "failed to start" fires before
+# compose's precise "dependency failed to start: ... is unhealthy".
+
+services:
+  mysql-users:
+    image: mysql:8.0
+    restart: "no"
+    stop_grace_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: user_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "${MYSQL_USERS_PORT:-3307}:3306"
+    volumes:
+      - ./user_service/db.sql:/docker-entrypoint-initdb.d/init.sql
+    # Keep the datadir in RAM -- see the header comment for why. Repeated per
+    # service on purpose: a TOP-LEVEL `x-*` anchor does not survive keploy's
+    # compose rewrite, which drops that key while keeping the aliases that
+    # reference it.
+    tmpfs:
+      - /var/lib/mysql:size=1g
+    command: --skip-log-bin
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  mysql-products:
+    image: mysql:8.0
+    restart: "no"
+    stop_grace_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: product_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "${MYSQL_PRODUCTS_PORT:-3308}:3306"
+    volumes:
+      - ./product_service/db.sql:/docker-entrypoint-initdb.d/init.sql
+    # Keep the datadir in RAM -- see the header comment for why. Repeated per
+    # service on purpose: a TOP-LEVEL `x-*` anchor does not survive keploy's
+    # compose rewrite, which drops that key while keeping the aliases that
+    # reference it.
+    tmpfs:
+      - /var/lib/mysql:size=1g
+    command: --skip-log-bin
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  mysql-orders:
+    image: mysql:8.0
+    restart: "no"
+    stop_grace_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: order_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "${MYSQL_ORDERS_PORT:-3309}:3306"
+    volumes:
+      - ./order_service/db.sql:/docker-entrypoint-initdb.d/init.sql
+    # Keep the datadir in RAM -- see the header comment for why. Repeated per
+    # service on purpose: a TOP-LEVEL `x-*` anchor does not survive keploy's
+    # compose rewrite, which drops that key while keeping the aliases that
+    # reference it.
+    tmpfs:
+      - /var/lib/mysql:size=1g
+    command: --skip-log-bin
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    restart: "no"
+    stop_grace_period: 20s
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "${ZOOKEEPER_PORT:-2181}:2181"
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "2181" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    restart: "no"
+    stop_grace_period: 20s
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "${KAFKA_PORT:-29092}:29092"
+    healthcheck:
+      test: [ "CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [ '/bin/bash', '-c' ]
+    command: |
+      "
+      echo 'Creating Kafka topics...'
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order-events --partitions 3 --replication-factor 1
+      echo 'Topics created successfully!'
+      kafka-topics --bootstrap-server kafka:9092 --list
+      tail -f /dev/null
+      "
+    restart: "no"
+    healthcheck:
+      test: [ "CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  user_service:
+    build:
+      context: .
+      dockerfile: ./user_service/Dockerfile
+    restart: "no"
+    stop_grace_period: 20s
+    environment:
+      DB_HOST: mysql-users
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: user_db
+      FLASK_RUN_PORT: "8082"
+      ADMIN_USERNAME: admin
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: admin123
+      RESET_ADMIN_PASSWORD: "true"
+      COVERAGE: "1"
+      JWT_TTL_SECONDS: "259200"  # 3 days (72 hours) for Keploy testing
+    depends_on:
+      mysql-users:
+        condition: service_healthy
+    ports:
+      - "${USER_SERVICE_PORT:-8082}:8082"
+    volumes:
+      - ./coverage:/coverage
+      - ./user_service/coverage:/svc_coverage
+
+  product_service:
+    build:
+      context: .
+      dockerfile: ./product_service/Dockerfile
+    restart: "no"
+    stop_grace_period: 20s
+    environment:
+      DB_HOST: mysql-products
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: product_db
+      FLASK_RUN_PORT: "8081"
+      COVERAGE: "1"
+    depends_on:
+      mysql-products:
+        condition: service_healthy
+    ports:
+      - "${PRODUCT_SERVICE_PORT:-8081}:8081"
+    volumes:
+      - ./coverage:/coverage
+      - ./product_service/coverage:/svc_coverage
+
+  order_service:
+    build:
+      context: .
+      dockerfile: ./order_service/Dockerfile
+    restart: "no"
+    stop_grace_period: 20s
+    environment:
+      DB_HOST: mysql-orders
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: order_db
+      USER_SERVICE_URL: http://user_service:8082/api/v1
+      PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
+      # Kafka configuration
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: order-events
+      KAFKA_GROUP_ID: order-service-group
+      FLASK_RUN_PORT: "8080"
+      COVERAGE: "1"
+      GOCOVERDIR: /svc_coverage
+    depends_on:
+      mysql-orders:
+        condition: service_healthy
+      user_service:
+        condition: service_started
+      product_service:
+        condition: service_started
+      kafka-init:
+        condition: service_healthy
+    ports:
+      - "${ORDER_SERVICE_PORT:-8080}:8080"
+    volumes:
+      - ./coverage:/coverage
+      - ./order_service/coverage:/svc_coverage
+
+  apigateway:
+    build:
+      context: .
+      dockerfile: ./apigateway/Dockerfile
+    restart: "no"
+    stop_grace_period: 20s
+    environment:
+      USER_SERVICE_URL: http://user_service:8082/api/v1
+      PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
+      ORDER_SERVICE_URL: http://order_service:8080/api/v1
+      FLASK_RUN_PORT: "8083"
+      COVERAGE: "1"
+    depends_on:
+      user_service:
+        condition: service_started
+      product_service:
+        condition: service_started
+      order_service:
+        condition: service_started
+    ports:
+      - "${APIGATEWAY_PORT:-8083}:8083"
+    volumes:
+      - ./coverage:/coverage
+      - ./apigateway/coverage:/svc_coverage
