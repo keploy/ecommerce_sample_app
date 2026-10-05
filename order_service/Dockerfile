@@ -1,8 +1,8 @@
 FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt ./
-ADD  https://raw.githubusercontent.com/keploy/keploy/refs/heads/main/pkg/core/proxy/tls/asset/ca.crt ca.crt
-ADD  https://raw.githubusercontent.com/keploy/keploy/refs/heads/main/pkg/core/proxy/tls/asset/setup_ca.sh setup_ca.sh
+# Keploy injects its per-run MITM CA and the trust env vars automatically; no
+# certificate needs to be baked in.
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN chmod +x /app/entrypoint.sh
