@@ -26,9 +26,8 @@ ENV GOROOT=/usr/local/go
 ENV PATH=/usr/local/go/bin:${PATH}
 ENV GOMOD=/app/go.mod
 
-# Add Keploy CA certificate setup
-ADD https://raw.githubusercontent.com/keploy/keploy/refs/heads/main/pkg/core/proxy/tls/asset/ca.crt /app/ca.crt
-ADD https://raw.githubusercontent.com/keploy/keploy/refs/heads/main/pkg/core/proxy/tls/asset/setup_ca.sh /app/setup_ca.sh
+# Keploy injects its per-run MITM CA and the trust env vars automatically; no
+# certificate needs to be baked in.
 
 # Copy entrypoint script
 COPY ./order_service/entrypoint.sh /app/entrypoint.sh

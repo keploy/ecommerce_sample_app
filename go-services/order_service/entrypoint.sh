@@ -1,11 +1,6 @@
 #!/bin/bash
 set -eu
 
-# Setup Keploy CA once (non-fatal if repeated)
-if [ -f ./setup_ca.sh ]; then
-  source ./setup_ca.sh || true
-fi
-
 # Detect Keploy test mode by checking for Keploy agent environment variables
 # The Keploy agent sets these when running in test mode
 if [ ! -z "${KEPLOY_TEST_ID:-}" ] || [ ! -z "${KEPLOY_TEST_RUN:-}" ]; then
