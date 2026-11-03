@@ -9,7 +9,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3317:3306"
+      - "${MYSQL_USERS_PORT:-3317}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -26,7 +26,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3318:3306"
+      - "${MYSQL_PRODUCTS_PORT:-3318}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -43,7 +43,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-      - "3319:3306"
+      - "${MYSQL_ORDERS_PORT:-3319}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -59,7 +59,7 @@ services:
       DEBUG: "1"
       AWS_DEFAULT_REGION: us-east-1
     ports:
-      - "4566:4566"
+      - "${LOCALSTACK_PORT:-4566}:4566"
     volumes:
       - ./localstack:/etc/localstack/init/ready.d
       - /var/run/docker.sock:/var/run/docker.sock
@@ -91,7 +91,7 @@ services:
       mysql-users:
         condition: service_healthy
     ports:
-      - "8092:8082"
+      - "${USER_SERVICE_PORT:-8092}:8082"
     volumes:
       - ./coverage:/coverage
       - ./user_service/coverage:/svc_coverage
@@ -111,7 +111,7 @@ services:
       mysql-products:
         condition: service_healthy
     ports:
-      - "8091:8081"
+      - "${PRODUCT_SERVICE_PORT:-8091}:8081"
     volumes:
       - ./coverage:/coverage
       - ./product_service/coverage:/svc_coverage
@@ -144,7 +144,7 @@ services:
       localstack:
         condition: service_started
     ports:
-      - "8094:8080"
+      - "${ORDER_SERVICE_PORT:-8094}:8080"
     volumes:
       - ./coverage:/coverage
       - ./order_service/coverage:/svc_coverage
@@ -167,7 +167,7 @@ services:
       order_service:
         condition: service_started
     ports:
-      - "8093:8083"
+      - "${APIGATEWAY_PORT:-8093}:8083"
     volumes:
       - ./coverage:/coverage
       - ./apigateway/coverage:/svc_coverage
