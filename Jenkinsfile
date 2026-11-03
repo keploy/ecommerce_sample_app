@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -50,6 +51,12 @@ pipeline {
             }
         }
 
+        stage('Automated Testing') {
+            steps {
+                bat 'docker compose exec -T user_service python -m pytest /app/tests/test_user.py -v'
+            }
+        }
+
         stage('Container Verification') {
             steps {
                 bat 'docker compose -f "%COMPOSE_FILE%" ps'
@@ -78,3 +85,4 @@ pipeline {
         }
     }
 }
+```
