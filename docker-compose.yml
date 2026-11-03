@@ -26,7 +26,7 @@ services:
       MYSQL_USER: user
       MYSQL_PASSWORD: password
     ports:
-       - "3318:3306"
+      - "3318:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -63,6 +63,14 @@ services:
     volumes:
       - ./localstack:/etc/localstack/init/ready.d
       - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c 'import urllib.request; urllib.request.urlopen("http://localhost:4566/_localstack/health")'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   user_service:
     build: ./user_service
@@ -83,7 +91,7 @@ services:
       mysql-users:
         condition: service_healthy
     ports:
-      - "8082:8082"
+      - "8092:8082"
     volumes:
       - ./coverage:/coverage
       - ./user_service/coverage:/svc_coverage
@@ -103,7 +111,7 @@ services:
       mysql-products:
         condition: service_healthy
     ports:
-      - "8081:8081"
+      - "8091:8081"
     volumes:
       - ./coverage:/coverage
       - ./product_service/coverage:/svc_coverage
@@ -136,7 +144,7 @@ services:
       localstack:
         condition: service_started
     ports:
-      - "8084:8080"
+      - "8094:8080"
     volumes:
       - ./coverage:/coverage
       - ./order_service/coverage:/svc_coverage
@@ -159,7 +167,7 @@ services:
       order_service:
         condition: service_started
     ports:
-      - "8083:8083"
+      - "8093:8083"
     volumes:
       - ./coverage:/coverage
       - ./apigateway/coverage:/svc_coverage

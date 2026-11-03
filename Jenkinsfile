@@ -1,4 +1,5 @@
 
+
 pipeline {
     agent any
 
@@ -14,6 +15,18 @@ pipeline {
     environment {
         COMPOSE_FILE = 'docker-compose.yml'
         IMAGE_TAG = "build-${BUILD_NUMBER}"
+
+        // Separate ports for Jenkins Docker Compose stack
+        MYSQL_USERS_PORT = '3417'
+        MYSQL_PRODUCTS_PORT = '3418'
+        MYSQL_ORDERS_PORT = '3419'
+
+        USER_SERVICE_PORT = '18092'
+        PRODUCT_SERVICE_PORT = '18091'
+        ORDER_SERVICE_PORT = '18094'
+        APIGATEWAY_PORT = '18093'
+
+        LOCALSTACK_PORT = '14566'
     }
 
     stages {
@@ -36,18 +49,28 @@ pipeline {
         stage('Configuration Validation') {
             steps {
                 bat 'docker compose -f "%COMPOSE_FILE%" config --quiet'
+                echo 'Docker Compose configuration is valid.'
             }
         }
 
         stage('Build Images') {
             steps {
                 bat 'docker compose -f "%COMPOSE_FILE%" build'
+                echo 'Docker images built successfully.'
             }
         }
 
         stage('Start Services') {
             steps {
                 bat 'docker compose -f "%COMPOSE_FILE%" up -d'
+                echo 'Docker Compose services started.'
+            }
+        }
+
+        stage('Container Status Check') {
+            steps {
+                bat 'docker compose -f "%COMPOSE_FILE%" ps -a'
+                bat 'docker compose -f "%COMPOSE_FILE%" logs --no-color --tail=50 user_service'
             }
         }
 
@@ -93,6 +116,8 @@ pipeline {
                     bat 'docker compose -f "%COMPOSE_FILE%" ps -a'
                     bat 'docker compose -f "%COMPOSE_FILE%" logs --no-color --tail=100 user_service'
                     bat 'docker compose -f "%COMPOSE_FILE%" logs --no-color --tail=50 mysql-users'
+                    bat 'docker compose -f "%COMPOSE_FILE%" logs --no-color --tail=50 mysql-products'
+                    bat 'docker compose -f "%COMPOSE_FILE%" logs --no-color --tail=50 mysql-orders'
                 } catch (Exception e) {
                     echo "Diagnostic collection failed: ${e.getMessage()}"
                 }
