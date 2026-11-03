@@ -1,5 +1,6 @@
 
 
+
 pipeline {
     agent any
 
@@ -76,7 +77,8 @@ pipeline {
 
         stage('Automated Testing') {
             steps {
-                bat 'docker compose exec -T user_service python -m pytest /app/tests/test_user.py -v'
+                bat 'docker compose -f "%COMPOSE_FILE%" exec -T user_service python -m pytest /app/tests/test_user.py -v'
+                echo 'User Service automated tests passed.'
             }
         }
 
