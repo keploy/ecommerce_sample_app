@@ -145,7 +145,7 @@ services:
       localstack:
         condition: service_started
     ports:
-      - "8080:8080"
+      - "8084:8080"
     volumes:
       - ./coverage:/coverage
       - ./order_service/coverage:/svc_coverage
