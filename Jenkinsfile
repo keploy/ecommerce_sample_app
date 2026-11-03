@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -80,6 +81,8 @@ pipeline {
         }
 
         always {
+            bat 'docker compose -f "%COMPOSE_FILE%" down || exit /b 0'
+            echo 'Docker Compose cleanup completed.'
             echo 'Pipeline execution finished.'
         }
     }
