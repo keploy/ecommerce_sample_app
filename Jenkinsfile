@@ -74,22 +74,34 @@ pipeline {
     post {
         success {
             echo 'CI pipeline completed successfully.'
-        }
 
-        failure {
-            echo 'CI pipeline failed. Check Console Output.'
-        }
-
-        always {
             script {
                 try {
                     bat 'docker compose -f "%COMPOSE_FILE%" down'
                     echo 'Docker Compose cleanup completed.'
                 } catch (Exception e) {
-                    echo "Cleanup skipped or failed: ${e.getMessage()}"
+                    echo "Cleanup failed: ${e.getMessage()}"
+                }
+            }
+        }
+
+        failure {
+            echo 'CI pipeline failed. Collecting diagnostic information.'
+
+            script {
+                try {
+                    bat 'docker compose -f "%COMPOSE_FILE%" ps -a'
+                    bat 'docker compose -f "%COMPOSE_FILE%" logs --no-color --tail=100 user_service'
+                    bat 'docker compose -f "%COMPOSE_FILE%" logs --no-color --tail=50 mysql-users'
+                } catch (Exception e) {
+                    echo "Diagnostic collection failed: ${e.getMessage()}"
                 }
             }
 
+            echo 'Failed containers are preserved for inspection.'
+        }
+
+        always {
             echo 'Pipeline execution finished.'
         }
     }
