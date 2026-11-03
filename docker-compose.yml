@@ -1,9 +1,7 @@
-version: "3.9"
-
+```yaml
 services:
   mysql-users:
     image: mysql:8.0
-    container_name: mysql-users
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -21,7 +19,6 @@ services:
 
   mysql-products:
     image: mysql:8.0
-    container_name: mysql-products
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -39,7 +36,6 @@ services:
 
   mysql-orders:
     image: mysql:8.0
-    container_name: mysql-orders
     restart: "no"
     stop_grace_period: 30s
     environment:
@@ -57,7 +53,6 @@ services:
 
   localstack:
     image: localstack/localstack:3.3
-    container_name: localstack
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -72,7 +67,6 @@ services:
 
   user_service:
     build: ./user_service
-    container_name: user_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -97,7 +91,6 @@ services:
 
   product_service:
     build: ./product_service
-    container_name: product_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -118,7 +111,6 @@ services:
 
   order_service:
     build: ./order_service
-    container_name: order_service
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -152,7 +144,6 @@ services:
 
   apigateway:
     build: ./apigateway
-    container_name: apigateway
     restart: "no"
     stop_grace_period: 20s
     environment:
@@ -173,3 +164,4 @@ services:
     volumes:
       - ./coverage:/coverage
       - ./apigateway/coverage:/svc_coverage
+```
