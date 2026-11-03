@@ -81,8 +81,15 @@ pipeline {
         }
 
         always {
-            bat 'docker compose -f "%COMPOSE_FILE%" down || exit /b 0'
-            echo 'Docker Compose cleanup completed.'
+            script {
+                try {
+                    bat 'docker compose -f "%COMPOSE_FILE%" down'
+                    echo 'Docker Compose cleanup completed.'
+                } catch (Exception e) {
+                    echo "Cleanup skipped or failed: ${e.getMessage()}"
+                }
+            }
+
             echo 'Pipeline execution finished.'
         }
     }
