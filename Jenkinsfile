@@ -1,6 +1,4 @@
 
-
-
 pipeline {
     agent any
 
@@ -28,6 +26,9 @@ pipeline {
         APIGATEWAY_PORT = '18093'
 
         LOCALSTACK_PORT = '14566'
+
+        // AWS CLI
+        AWS_CLI = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'
     }
 
     stages {
@@ -44,6 +45,9 @@ pipeline {
                 bat 'git --version'
                 bat 'docker --version'
                 bat 'docker compose version'
+
+                // Verify AWS CLI is accessible to Jenkins service
+                bat '"%AWS_CLI%" --version'
             }
         }
 
