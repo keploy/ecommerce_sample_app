@@ -1,4 +1,5 @@
 
+
 pipeline {
     agent any
 
@@ -40,7 +41,7 @@ pipeline {
                 script {
                     env.GIT_COMMIT_SHORT = bat(
                         returnStdout: true,
-                        script: 'git rev-parse --short=12 HEAD'
+                        script: '@echo off\ngit rev-parse --short=12 HEAD'
                     ).trim()
 
                     echo "Commit tag: ${env.GIT_COMMIT_SHORT}"
@@ -110,10 +111,10 @@ pipeline {
                         '''
 
                         def services = [
-                            [compose: 'user_service',  repo: 'user-service'],
+                            [compose: 'user_service', repo: 'user-service'],
                             [compose: 'product_service', repo: 'product-service'],
-                            [compose: 'order_service',  repo: 'order-service'],
-                            [compose: 'apigateway',     repo: 'apigateway']
+                            [compose: 'order_service', repo: 'order-service'],
+                            [compose: 'apigateway', repo: 'apigateway']
                         ]
 
                         services.each { service ->
@@ -121,7 +122,7 @@ pipeline {
 
                             def imageId = bat(
                                 returnStdout: true,
-                                script: "docker compose -f \"%COMPOSE_FILE%\" images -q ${service.compose}"
+                                script: "@echo off\ndocker compose -f \"%COMPOSE_FILE%\" images -q ${service.compose}"
                             ).trim()
 
                             if (!imageId) {
