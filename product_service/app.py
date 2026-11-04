@@ -318,6 +318,33 @@ def search_products():
     return jsonify(rows), 200
 
 
+
+@app.get('/health')
+def health():
+    return jsonify({'status': 'ok', 'service': 'product_service'}), 200
+
+
+@app.get('/ready')
+def ready():
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        if conn is None:
+            return jsonify({'status': 'not_ready'}), 503
+        cur = conn.cursor()
+        cur.execute('SELECT 1')
+        cur.fetchone()
+        return jsonify({'status': 'ready'}), 200
+    except Exception:
+        return jsonify({'status': 'not_ready'}), 503
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
+
 if __name__ == '__main__':
     import signal
     def _graceful(signum, frame):

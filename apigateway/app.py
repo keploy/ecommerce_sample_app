@@ -99,6 +99,12 @@ def gw_orders(subpath):
 
 
 
+
+@app.get('/health')
+def health():
+    return jsonify({'status': 'ok', 'service': 'apigateway'}), 200
+
+
 if __name__ == '__main__':
     # Ensure we stop/save coverage before exiting on SIGTERM/SIGINT
     def _graceful_exit(signum, frame):
