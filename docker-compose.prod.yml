@@ -29,7 +29,7 @@ services:
           - mysql-products
           - mysql-orders
   user_service:
-    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/user-service:13f7af4
+    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/user-service:${IMAGE_TAG:?Missing IMAGE_TAG}
     restart: unless-stopped
     environment:
       DB_HOST: mysql-users
@@ -56,7 +56,7 @@ services:
       retries: 3
       start_period: 30s
   product_service:
-    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/product-service:13f7af4
+    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/product-service:${IMAGE_TAG:?Missing IMAGE_TAG}
     restart: unless-stopped
     environment:
       DB_HOST: mysql-products
@@ -79,7 +79,7 @@ services:
       retries: 3
       start_period: 30s
   order_service:
-    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/order-service:13f7af4
+    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/order-service:${IMAGE_TAG:?Missing IMAGE_TAG}
     restart: unless-stopped
     environment:
       DB_HOST: mysql-orders
@@ -110,8 +110,7 @@ services:
       retries: 3
       start_period: 30s
   apigateway:
-    build: ./apigateway
-    image: ecommerce-apigateway:13f7af4
+    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/apigateway:${IMAGE_TAG:?Missing IMAGE_TAG}
     restart: unless-stopped
     environment:
       USER_SERVICE_URL: http://user_service:8082/api/v1
