@@ -30,6 +30,7 @@ pipeline {
         AWS_CLI = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'
         AWS_REGION = 'ap-southeast-2'
         ECR_REGISTRY = '305846488272.dkr.ecr.ap-southeast-2.amazonaws.com'
+        EC2_INSTANCE_ID = 'i-084442d5ab7927a3f'
     }
 
     stages {
@@ -136,6 +137,86 @@ pipeline {
 
                             echo "Successfully pushed ${ecrImage}"
                         }
+                    }
+                }
+            }
+        }
+
+        stage('SSM Connectivity Test') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-ecr-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
+                    script {
+                        def commandId = bat(
+                            returnStdout: true,
+                            script: '''
+                                @echo off
+                                set AWS_DEFAULT_REGION=%AWS_REGION%
+                                "%AWS_CLI%" ssm send-command --region %AWS_REGION% --instance-ids %EC2_INSTANCE_ID% --document-name AWS-RunShellScript --parameters "commands=echo SSM_CONNECTIVITY_OK" --query "Command.CommandId" --output text
+                            '''
+                        ).trim()
+
+                        if (!commandId || commandId == 'None') {
+                            error 'SSM command submission failed.'
+                        }
+
+                        echo "SSM Command ID: ${commandId}"
+
+                        def status = 'Pending'
+
+                        timeout(time: 3, unit: 'MINUTES') {
+                            while (!(status in [
+                                'Success',
+                                'Failed',
+                                'TimedOut',
+                                'Cancelled',
+                                'Undeliverable',
+                                'Terminated'
+                            ])) {
+                                sleep(time: 5, unit: 'SECONDS')
+
+                                try {
+                                    status = bat(
+                                        returnStdout: true,
+                                        script: """@echo off
+set AWS_DEFAULT_REGION=%AWS_REGION%
+"%AWS_CLI%" ssm get-command-invocation --region %AWS_REGION% --command-id ${commandId} --instance-id %EC2_INSTANCE_ID% --query Status --output text
+"""
+                                    ).trim()
+                                } catch (Exception e) {
+                                    if (e.toString().contains('InvocationDoesNotExist')) {
+                                        echo 'SSM invocation is not available yet. Retrying...'
+                                    } else {
+                                        throw e
+                                    }
+                                }
+                            }
+                        }
+
+                        if (status != 'Success') {
+                            error "SSM connectivity test failed. Status: ${status}"
+                        }
+
+                        def output = bat(
+                            returnStdout: true,
+                            script: """@echo off
+set AWS_DEFAULT_REGION=%AWS_REGION%
+"%AWS_CLI%" ssm get-command-invocation --region %AWS_REGION% --command-id ${commandId} --instance-id %EC2_INSTANCE_ID% --query StandardOutputContent --output text
+"""
+                        ).trim()
+
+                        echo "SSM command output: ${output}"
+
+                        if (!output.contains('SSM_CONNECTIVITY_OK')) {
+                            error 'Expected SSM output was not found.'
+                        }
+
+                        echo 'SSM connectivity test passed.'
                     }
                 }
             }
