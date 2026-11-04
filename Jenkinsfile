@@ -16,9 +16,9 @@ pipeline {
         COMPOSE_FILE = 'docker-compose.yml'
         IMAGE_TAG = "build-${BUILD_NUMBER}"
 
-        MYSQL_USERS_PORT = '3417'
-        MYSQL_PRODUCTS_PORT = '3418'
-        MYSQL_ORDERS_PORT = '3419'
+        MYSQL_USERS_PORT = '3517'
+        MYSQL_PRODUCTS_PORT = '3518'
+        MYSQL_ORDERS_PORT = '3519'
 
         USER_SERVICE_PORT = '18092'
         PRODUCT_SERVICE_PORT = '18091'
