@@ -15,7 +15,6 @@ pipeline {
         COMPOSE_FILE = 'docker-compose.yml'
         IMAGE_TAG = "build-${BUILD_NUMBER}"
 
-        // Separate ports for Jenkins Docker Compose stack
         MYSQL_USERS_PORT = '3417'
         MYSQL_PRODUCTS_PORT = '3418'
         MYSQL_ORDERS_PORT = '3419'
@@ -27,8 +26,9 @@ pipeline {
 
         LOCALSTACK_PORT = '14566'
 
-        // AWS CLI
         AWS_CLI = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'
+        AWS_REGION = 'ap-southeast-2'
+        ECR_REGISTRY = '305846488272.dkr.ecr.ap-southeast-2.amazonaws.com'
     }
 
     stages {
@@ -36,7 +36,15 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                bat 'git rev-parse --short HEAD'
+
+                script {
+                    env.GIT_COMMIT_SHORT = bat(
+                        returnStdout: true,
+                        script: 'git rev-parse --short=12 HEAD'
+                    ).trim()
+
+                    echo "Commit tag: ${env.GIT_COMMIT_SHORT}"
+                }
             }
         }
 
@@ -45,8 +53,6 @@ pipeline {
                 bat 'git --version'
                 bat 'docker --version'
                 bat 'docker compose version'
-
-                // Verify AWS CLI is accessible to Jenkins service
                 bat '"%AWS_CLI%" --version'
             }
         }
@@ -86,6 +92,54 @@ pipeline {
             }
         }
 
+        stage('Push Images to ECR') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-ecr-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
+                    script {
+                        bat '''
+                            @echo off
+                            set AWS_DEFAULT_REGION=%AWS_REGION%
+                            "%AWS_CLI%" ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %ECR_REGISTRY%
+                            if errorlevel 1 exit /b 1
+                        '''
+
+                        def services = [
+                            [compose: 'user_service',  repo: 'user-service'],
+                            [compose: 'product_service', repo: 'product-service'],
+                            [compose: 'order_service',  repo: 'order-service'],
+                            [compose: 'apigateway',     repo: 'apigateway']
+                        ]
+
+                        services.each { service ->
+                            echo "Publishing ${service.repo}"
+
+                            def imageId = bat(
+                                returnStdout: true,
+                                script: "docker compose -f \"%COMPOSE_FILE%\" images -q ${service.compose}"
+                            ).trim()
+
+                            if (!imageId) {
+                                error "No Docker image found for ${service.compose}"
+                            }
+
+                            def ecrImage = "${env.ECR_REGISTRY}/${service.repo}:${env.GIT_COMMIT_SHORT}"
+
+                            bat "docker tag ${imageId} ${ecrImage}"
+                            bat "docker push ${ecrImage}"
+
+                            echo "Successfully pushed ${ecrImage}"
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Container Verification') {
             steps {
                 bat 'docker compose -f "%COMPOSE_FILE%" ps'
@@ -102,7 +156,7 @@ pipeline {
 
     post {
         success {
-            echo 'CI pipeline completed successfully.'
+            echo 'CI/CD image publishing pipeline completed successfully.'
 
             script {
                 try {
@@ -115,7 +169,7 @@ pipeline {
         }
 
         failure {
-            echo 'CI pipeline failed. Collecting diagnostic information.'
+            echo 'Pipeline failed. Collecting diagnostic information.'
 
             script {
                 try {
