@@ -16,16 +16,16 @@ pipeline {
         COMPOSE_FILE = 'docker-compose.yml'
         IMAGE_TAG = "build-${BUILD_NUMBER}"
 
-        MYSQL_USERS_PORT = '3517'
-        MYSQL_PRODUCTS_PORT = '3518'
-        MYSQL_ORDERS_PORT = '3519'
+        MYSQL_USERS_PORT = '3617'
+        MYSQL_PRODUCTS_PORT = '3618'
+        MYSQL_ORDERS_PORT = '3619'
 
-        USER_SERVICE_PORT = '18092'
-        PRODUCT_SERVICE_PORT = '18091'
-        ORDER_SERVICE_PORT = '18094'
-        APIGATEWAY_PORT = '18093'
+        USER_SERVICE_PORT = '18192'
+        PRODUCT_SERVICE_PORT = '18191'
+        ORDER_SERVICE_PORT = '18194'
+        APIGATEWAY_PORT = '18193'
 
-        LOCALSTACK_PORT = '14566'
+        LOCALSTACK_PORT = '14666'
 
         AWS_CLI = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'
         AWS_REGION = 'ap-southeast-2'
