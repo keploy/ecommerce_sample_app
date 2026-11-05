@@ -1,0 +1,145 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command:
+      - --innodb-buffer-pool-size=96M
+      - --max-connections=30
+      - --performance-schema=OFF
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Missing MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: user_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Missing DB_PASSWORD}
+
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      app:
+        aliases:
+          - mysql-users
+          - mysql-products
+          - mysql-orders
+  user_service:
+    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/user-service:${IMAGE_TAG:?Missing IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql-users
+      DB_USER: user
+      DB_PASSWORD: ${DB_PASSWORD:?Missing DB_PASSWORD}
+      DB_NAME: user_db
+      JWT_SECRET: ${JWT_SECRET:?Missing JWT_SECRET}
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: "8082"
+      ADMIN_USERNAME: admin
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Missing ADMIN_PASSWORD}
+      RESET_ADMIN_PASSWORD: "false"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  product_service:
+    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/product-service:${IMAGE_TAG:?Missing IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql-products
+      DB_USER: user
+      DB_PASSWORD: ${DB_PASSWORD:?Missing DB_PASSWORD}
+      DB_NAME: product_db
+      JWT_SECRET: ${JWT_SECRET:?Missing JWT_SECRET}
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: "8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  order_service:
+    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/order-service:${IMAGE_TAG:?Missing IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql-orders
+      DB_USER: user
+      DB_PASSWORD: ${DB_PASSWORD:?Missing DB_PASSWORD}
+      DB_NAME: order_db
+      JWT_SECRET: ${JWT_SECRET:?Missing JWT_SECRET}
+      USER_SERVICE_URL: http://user_service:8082/api/v1
+      PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
+      AWS_REGION: ap-southeast-2
+      SQS_QUEUE_URL: https://sqs.ap-southeast-2.amazonaws.com/305846488272/order-events
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: "8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      user_service:
+        condition: service_healthy
+      product_service:
+        condition: service_healthy
+    networks:
+      - app
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  apigateway:
+    image: 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com/apigateway:${IMAGE_TAG:?Missing IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      USER_SERVICE_URL: http://user_service:8082/api/v1
+      PRODUCT_SERVICE_URL: http://product_service:8081/api/v1
+      ORDER_SERVICE_URL: http://order_service:8080/api/v1
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: "8083"
+    depends_on:
+      user_service:
+        condition: service_healthy
+      product_service:
+        condition: service_healthy
+      order_service:
+        condition: service_healthy
+    ports:
+      - "80:8083"
+    networks:
+      - app
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8083/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  mysql_data:
+
+networks:
+  app:
+    driver: bridge
