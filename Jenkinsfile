@@ -45,7 +45,9 @@ pipeline {
                         script: '@echo off\ngit rev-parse --short=12 HEAD'
                     ).trim()
 
+                    env.DEPLOY_IMAGE_TAG = "${env.GIT_COMMIT_SHORT}-${env.BUILD_NUMBER}"
                     echo "Commit tag: ${env.GIT_COMMIT_SHORT}"
+                    echo "Unique deployment image tag: ${env.DEPLOY_IMAGE_TAG}"
                 }
             }
         }
@@ -130,7 +132,7 @@ pipeline {
                                 error "No Docker image found for ${service.compose}"
                             }
 
-                            def ecrImage = "${env.ECR_REGISTRY}/${service.repo}:${env.GIT_COMMIT_SHORT}"
+                            def ecrImage = "${env.ECR_REGISTRY}/${service.repo}:${env.DEPLOY_IMAGE_TAG}"
 
                             bat "docker tag ${imageId} ${ecrImage}"
                             bat "docker push ${ecrImage}"
@@ -180,20 +182,20 @@ pipeline {
                             ])) {
                                 sleep(time: 5, unit: 'SECONDS')
 
-                                try {
-                                    status = bat(
-                                        returnStdout: true,
-                                        script: """@echo off
+                                def pollOutput = bat(
+                                    returnStdout: true,
+                                    script: """@echo off
 set AWS_DEFAULT_REGION=%AWS_REGION%
-"%AWS_CLI%" ssm get-command-invocation --region %AWS_REGION% --command-id ${commandId} --instance-id %EC2_INSTANCE_ID% --query Status --output text
+"%AWS_CLI%" ssm get-command-invocation --region %AWS_REGION% --command-id ${commandId} --instance-id %EC2_INSTANCE_ID% --query Status --output text 2>&1 || echo SSM_POLL_COMMAND_FAILED
 """
-                                    ).trim()
-                                } catch (Exception e) {
-                                    if (e.toString().contains('InvocationDoesNotExist')) {
-                                        echo 'SSM invocation is not available yet. Retrying...'
-                                    } else {
-                                        throw e
-                                    }
+                                ).trim()
+
+                                if (pollOutput.contains('InvocationDoesNotExist')) {
+                                    echo 'SSM invocation is not available yet. Retrying...'
+                                } else if (pollOutput.contains('SSM_POLL_COMMAND_FAILED')) {
+                                    error "SSM polling command failed: ${pollOutput}"
+                                } else {
+                                    status = pollOutput
                                 }
                             }
                         }
@@ -222,6 +224,139 @@ set AWS_DEFAULT_REGION=%AWS_REGION%
             }
         }
 
+        stage('Deploy to EC2 via SSM') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-ecr-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
+                    script {
+                        def deployCommands = [
+                            'set -e',
+                            'cd /opt/ecommerce_sample_app',
+                            'export AWS_DEFAULT_REGION=ap-southeast-2',
+                            'aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 305846488272.dkr.ecr.ap-southeast-2.amazonaws.com',
+                            'PREVIOUS_CID=$(docker ps -q --filter label=com.docker.compose.service=user_service --filter status=running)',
+                            '[ -n "$PREVIOUS_CID" ] || { echo "Cannot identify previous deployment"; exit 1; }',
+                            'PREVIOUS_IMAGE=$(docker inspect --format \'{{.Config.Image}}\' "$PREVIOUS_CID")',
+                            'PREVIOUS_TAG=${PREVIOUS_IMAGE##*:}',
+                            '[ -n "$PREVIOUS_TAG" ] || { echo "Previous image tag missing"; exit 1; }',
+                            'for service in user_service product_service order_service apigateway; do',
+                            '  cid=$(docker ps -q --filter label=com.docker.compose.service="$service" --filter status=running)',
+                            '  [ -n "$cid" ] || { echo "Previous container missing: $service"; exit 1; }',
+                            '  image=$(docker inspect --format \'{{.Config.Image}}\' "$cid")',
+                            '  tag=${image##*:}',
+                            '  if [ "$tag" != "$PREVIOUS_TAG" ]; then echo "Inconsistent previous tag for $service: $tag"; exit 1; fi',
+                            'done',
+                            'DEPLOY_OK=0',
+                            'rollback_on_exit() {',
+                            '  rc=$?',
+                            '  if [ "$DEPLOY_OK" != "1" ]; then',
+                            '    echo "Deployment failed. Rolling back to $PREVIOUS_TAG"',
+                            '    export IMAGE_TAG="$PREVIOUS_TAG"',
+                            '    docker compose -f docker-compose.prod.yml pull user_service product_service order_service apigateway && docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate user_service product_service order_service apigateway || echo "AUTOMATIC ROLLBACK FAILED - MANUAL RECOVERY REQUIRED"',
+                            '  fi',
+                            '  exit "$rc"',
+                            '}',
+                            'trap rollback_on_exit EXIT',
+                            "export IMAGE_TAG=${env.DEPLOY_IMAGE_TAG}",
+                            'docker compose -f docker-compose.prod.yml pull user_service product_service order_service apigateway',
+                            'docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate user_service product_service order_service apigateway',
+                            'for service in user_service product_service order_service apigateway; do',
+                            '  cid=$(docker compose -f docker-compose.prod.yml ps -q "$service")',
+                            '  if [ -z "$cid" ]; then echo "Container missing: $service"; exit 1; fi',
+                            '  echo "Checking health: $service"',
+                            '  attempt=0',
+                            '  health=starting',
+                            '  while [ "$attempt" -lt 60 ]; do',
+                            '    health=$(docker inspect --format \'{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}\' "$cid")',
+                            '    if [ "$health" = "healthy" ]; then break; fi',
+                            '    if [ "$health" = "unhealthy" ] || [ "$health" = "no-healthcheck" ]; then echo "$service health failed: $health"; docker logs "$cid" --tail 80; exit 1; fi',
+                            '    sleep 5',
+                            '    attempt=$((attempt + 1))',
+                            '  done',
+                            '  if [ "$health" != "healthy" ]; then echo "$service health timeout: $health"; docker logs "$cid" --tail 80; exit 1; fi',
+                            '  echo "$service is healthy"',
+                            'done',
+                            'curl -fsS http://localhost/health',
+                            'echo',
+                            'docker compose -f docker-compose.prod.yml ps',
+                            'DEPLOY_OK=1',
+                            'trap - EXIT',
+                            'echo EC2_DEPLOYMENT_SUCCESS'
+                        ]
+
+                        writeFile(
+                            file: 'ssm-deploy-commands.json',
+                            text: groovy.json.JsonOutput.toJson([commands: deployCommands])
+                        )
+
+                        def commandId = bat(
+                            returnStdout: true,
+                            script: """@echo off
+set AWS_DEFAULT_REGION=%AWS_REGION%
+"%AWS_CLI%" ssm send-command --region %AWS_REGION% --instance-ids %EC2_INSTANCE_ID% --document-name AWS-RunShellScript --comment "Ecommerce deployment ${env.DEPLOY_IMAGE_TAG}" --parameters file://ssm-deploy-commands.json --query "Command.CommandId" --output text
+"""
+                        ).trim()
+
+                        bat 'if exist ssm-deploy-commands.json del ssm-deploy-commands.json'
+
+                        if (!commandId || commandId == 'None') {
+                            error 'EC2 deployment command submission failed.'
+                        }
+
+                        echo "EC2 deployment command ID: ${commandId}"
+
+                        def status = 'Pending'
+
+                        timeout(time: 30, unit: 'MINUTES') {
+                            while (!(status in [
+                                'Success', 'Failed', 'TimedOut',
+                                'Cancelled', 'Undeliverable', 'Terminated'
+                            ])) {
+                                sleep(time: 5, unit: 'SECONDS')
+
+                                def pollOutput = bat(
+                                    returnStdout: true,
+                                    script: """@echo off
+set AWS_DEFAULT_REGION=%AWS_REGION%
+"%AWS_CLI%" ssm get-command-invocation --region %AWS_REGION% --command-id ${commandId} --instance-id %EC2_INSTANCE_ID% --query Status --output text 2>&1 || echo SSM_POLL_COMMAND_FAILED
+"""
+                                ).trim()
+
+                                if (pollOutput.contains('InvocationDoesNotExist')) {
+                                    echo 'SSM invocation not ready. Retrying...'
+                                } else if (pollOutput.contains('SSM_POLL_COMMAND_FAILED')) {
+                                    error "SSM polling command failed: ${pollOutput}"
+                                } else {
+                                    status = pollOutput
+                                }
+                            }
+                        }
+
+                        def output = bat(
+                            returnStdout: true,
+                            script: """@echo off
+set AWS_DEFAULT_REGION=%AWS_REGION%
+"%AWS_CLI%" ssm get-command-invocation --region %AWS_REGION% --command-id ${commandId} --instance-id %EC2_INSTANCE_ID% --query StandardOutputContent --output text
+"""
+                        ).trim()
+
+                        echo "EC2 deployment output: ${output}"
+
+                        if (status != 'Success' || !output.contains('EC2_DEPLOYMENT_SUCCESS')) {
+                            error "EC2 deployment failed. SSM status: ${status}"
+                        }
+
+                        echo 'EC2 deployment and health verification passed.'
+                    }
+                }
+            }
+        }
+
         stage('Container Verification') {
             steps {
                 bat 'docker compose -f "%COMPOSE_FILE%" ps'
@@ -238,7 +373,7 @@ set AWS_DEFAULT_REGION=%AWS_REGION%
 
     post {
         success {
-            echo 'CI/CD image publishing pipeline completed successfully.'
+            echo 'CI/CD image publishing and EC2 deployment completed successfully.'
 
             script {
                 try {
