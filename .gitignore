@@ -12,3 +12,6 @@ venv/
 
 # OS
 .DS_Store
+
+# Gitleaks local scan reports
+.gitleaks-*.json
