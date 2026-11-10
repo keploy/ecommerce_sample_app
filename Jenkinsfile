@@ -30,7 +30,7 @@ pipeline {
         AWS_CLI = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'
         AWS_REGION = 'ap-southeast-2'
         ECR_REGISTRY = '305846488272.dkr.ecr.ap-southeast-2.amazonaws.com'
-        EC2_INSTANCE_ID = 'i-084442d5ab7927a3f'
+        EC2_INSTANCE_ID = 'i-04c73c04bdd6d9e53'
     }
 
     stages {
