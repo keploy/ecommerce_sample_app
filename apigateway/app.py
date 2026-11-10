@@ -105,6 +105,33 @@ def health():
     return jsonify({'status': 'ok', 'service': 'apigateway'}), 200
 
 
+@app.get('/ready')
+def ready():
+    services = {}
+    checks = (
+        ('user_service', USER_SERVICE_URL),
+        ('product_service', PRODUCT_SERVICE_URL),
+        ('order_service', ORDER_SERVICE_URL),
+    )
+
+    for name, base_url in checks:
+        ready_url = base_url.rsplit('/api/v1', 1)[0].rstrip('/') + '/ready'
+        try:
+            response = requests.get(ready_url, timeout=3)
+            services[name] = 'ready' if response.status_code == 200 else 'not_ready'
+        except requests.RequestException:
+            services[name] = 'not_ready'
+
+    all_ready = all(status == 'ready' for status in services.values())
+    status_code = 200 if all_ready else 503
+
+    return jsonify({
+        'service': 'apigateway',
+        'status': 'ready' if all_ready else 'not_ready',
+        'services': services
+    }), status_code
+
+
 if __name__ == '__main__':
     # Ensure we stop/save coverage before exiting on SIGTERM/SIGINT
     def _graceful_exit(signum, frame):

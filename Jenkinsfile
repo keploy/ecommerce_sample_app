@@ -93,6 +93,8 @@ pipeline {
             steps {
                 bat 'docker compose -f "%COMPOSE_FILE%" exec -T user_service python -m pytest /app/tests/test_user.py -v'
                 echo 'User Service automated tests passed.'
+                bat 'docker compose -f "%COMPOSE_FILE%" exec -T apigateway python -m unittest discover -s /app/tests -v'
+                echo 'API Gateway readiness tests passed.'
             }
         }
 
